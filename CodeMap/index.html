@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Codemap</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="root">
+    <div id="toolbar" class="toolbar"></div>
+    <div class="layout">
+      <aside id="sidebar" class="sidebar"></aside>
+      <main class="main">
+        <div id="statbar" class="statbar"></div>
+        <div id="tab-content" class="tab-content"></div>
+        <div id="drop-overlay" class="drop-overlay">
+          <div class="drop-msg">Drop folder to parse</div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <input id="dir-picker" type="file" webkitdirectory multiple style="display:none" />
+  <script type="module">
+    import { ingestFromDrop } from './src/ingest.js';
+    import { parseFile } from './src/parser.js';
+    import { setFiles } from './src/state.js';
+    import { analyze } from './src/analyzer.js';
+    import { renderAll, stepWalk } from './src/renderer.js';
+
+    const overlay = document.getElementById('drop-overlay');
+    const picker = document.getElementById('dir-picker');
+
+    function showOverlay(v) { overlay.style.display = v ? 'flex' : 'none'; }
+
+    document.body.addEventListener('dragenter', e => { e.preventDefault(); showOverlay(true); });
+    document.body.addEventListener('dragover',  e => { e.preventDefault(); });
+    document.body.addEventListener('dragleave', e => {
+      if (e.relatedTarget && document.body.contains(e.relatedTarget)) return;
+      showOverlay(false);
+    });
+    document.body.addEventListener('drop', async e => {
+      e.preventDefault();
+      showOverlay(false);
+      const files = await ingestFromDrop(e.dataTransfer);
+      const analysis = analyze(files);
+      setFiles(files, analysis);
+      renderAll();
+    });
+
+    picker.addEventListener('change', async e => {
+      const list = [...e.target.files];
+      const out = [];
+      for (const f of list) {
+        const path = f.webkitRelativePath || f.name;
+        const src = await f.text();
+        const parsed = parseFile(f.name, src, path);
+        if (parsed) out.push(parsed);
+      }
+      const analysis = analyze(out);
+      setFiles(out, analysis);
+      renderAll();
+    });
+
+    document.addEventListener('keydown', e => {
+      if (e.target.matches('input, textarea, select, [contenteditable]')) return;
+      if (e.key === 'ArrowLeft')  { e.preventDefault(); stepWalk(-1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); stepWalk(1); }
+    });
+
+    renderAll();
+  </script>
+</body>
+</html>
