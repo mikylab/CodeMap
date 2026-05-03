@@ -1,6 +1,6 @@
-import { STATE, setFunctionsSort, selectPath } from '../state.js';
+import { STATE, setFunctionsSort, selectPath, setTraceRoot, setActiveTab } from '../state.js';
 import { cxBucket } from '../tabs.js';
-import { el } from '../dom.js';
+import { el, basename } from '../dom.js';
 
 const SORTS = [
   { id: 'name', label: 'Name' },
@@ -51,7 +51,7 @@ function toolbar(count, onChange) {
   wrap.appendChild(sel);
   wrap.appendChild(el('div', { cls: 'tb-spacer' }));
   const label = STATE.selectedPath
-    ? `${count} functions in ${STATE.selectedPath.split(/[\\/]/).pop()}`
+    ? `${count} functions in ${basename(STATE.selectedPath)}`
     : `${count} functions`;
   wrap.appendChild(el('span', { cls: 'fn-tb-count', text: label }));
   return wrap;
@@ -70,7 +70,14 @@ function rowList(fns, onChange) {
 function row(fn, onChange) {
   const r = el('div', {
     cls: 'fn-row',
-    on: { click: () => { selectPath(fn._file.path); onChange(); } },
+    on: {
+      click: () => {
+        selectPath(fn._file.path);
+        setTraceRoot({ name: fn.name, file: fn._file.path, lineNum: fn.lineNum });
+        setActiveTab('trace');
+        onChange();
+      },
+    },
   });
   r.appendChild(el('span', { cls: 'fn-name', text: fn.name }));
   r.appendChild(el('span', { cls: 'fn-file', text: fn._file.name }));

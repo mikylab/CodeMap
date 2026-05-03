@@ -1,4 +1,4 @@
-import { STATE, setWalkIdx, selectPath } from '../state.js';
+import { STATE, setWalkIdx, selectPath, setTraceRoot, setActiveTab } from '../state.js';
 import { STEP_COLORS } from '../tabs.js';
 import { el } from '../dom.js';
 
@@ -70,7 +70,7 @@ function walkBody(step, color, onChange) {
   const body = el('div', { cls: 'walk-body' });
   body.appendChild(highlightCard(step, color));
   if (step.files.length) body.appendChild(chipCard('Files in this section', step.files, color, p => fileChip(p, onChange)));
-  if (step.fns.length) body.appendChild(chipCard('Key functions', step.fns, color, n => fnChip(n)));
+  if (step.fns.length) body.appendChild(chipCard('Key functions', step.fns, color, n => fnChip(n, onChange)));
   if (step.note) body.appendChild(noteStrip(step.note));
   return body;
 }
@@ -98,9 +98,22 @@ function fileChip(path, onChange) {
   });
 }
 
-function fnChip(name) {
-  return el('button', { cls: 'walk-fn-chip', type: 'button', text: name });
+function fnChip(name, onChange) {
+  return el('button', {
+    cls: 'walk-fn-chip', type: 'button', text: name,
+    on: {
+      click: () => {
+        const hit = findFn(name);
+        if (!hit) return;
+        setTraceRoot(hit);
+        setActiveTab('trace');
+        onChange();
+      },
+    },
+  });
 }
+
+function findFn(name) { return STATE.fnByName.get(name) || null; }
 
 function noteStrip(note) {
   return el('div', { cls: 'walk-note', text: note });

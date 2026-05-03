@@ -6,6 +6,7 @@ import { renderOverview } from './views/overview.js';
 import { renderWalk } from './views/walk.js';
 import { renderFunctions } from './views/functions.js';
 import { renderLibraries } from './views/libraries.js';
+import { renderTrace } from './views/trace.js';
 import { clear } from './dom.js';
 
 export function renderAll() {
@@ -27,6 +28,7 @@ function viewFor(tab) {
     case 'walk':      return renderWalk(renderAll);
     case 'functions': return renderFunctions(renderAll);
     case 'libraries': return renderLibraries();
+    case 'trace':     return renderTrace(renderAll);
     default:          return renderOverview();
   }
 }
