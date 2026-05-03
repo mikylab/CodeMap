@@ -7,6 +7,10 @@ export function renderWalk(onChange) {
   const wrap = el('div', { cls: 'walk-root' });
   const step = STATE.walk[STATE.walkIdx];
   const color = STEP_COLORS()[step.category] || '#888780';
+  wrap.appendChild(el('div', {
+    cls: 'view-hint',
+    text: 'A guided tour through this codebase, ordered high-level → detail. Use ← / → or click a dot to jump.',
+  }));
   wrap.appendChild(walkBar(step, onChange));
   wrap.appendChild(progressTrail(onChange));
   wrap.appendChild(walkBody(step, color, onChange));
@@ -35,7 +39,14 @@ function walkBar(step, onChange) {
     disabled: idx === 0,
     on: { click: () => { setWalkIdx(idx - 1); onChange(); } },
   }));
-  bar.appendChild(el('div', { cls: 'walk-title', text: step.title }));
+  const titleWrap = el('div', { cls: 'walk-title' });
+  titleWrap.appendChild(el('span', {
+    cls: 'walk-cat-tag',
+    style: { color: STEP_COLORS()[step.category] || '#888780', borderColor: STEP_COLORS()[step.category] || '#888780' },
+    text: step.category,
+  }));
+  titleWrap.appendChild(el('span', { text: step.title }));
+  bar.appendChild(titleWrap);
   bar.appendChild(el('div', { cls: 'walk-counter', text: `${idx + 1} / ${total}` }));
   bar.appendChild(el('button', {
     cls: 'walk-btn primary', type: 'button', text: 'next →',
