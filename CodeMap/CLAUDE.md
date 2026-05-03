@@ -63,13 +63,21 @@ codemap/
   file: string,          // path of containing file
   lineNum: number,       // 1-indexed
   lines: number,         // estimated body length
-  cx: number             // cyclomatic complexity of this function
+  cx: number,            // cyclomatic complexity of this function
+  calls: string[]        // distinct callee names found in body via regex (sorted, deduped)
 }
 
 // Import
 {
   from: string,          // path of importing file
   lib: string            // raw import string (before splitting on / or .)
+}
+
+// CallEdge (from analyzer)
+{
+  from: string,          // fnKey of caller
+  to: string,            // fnKey of resolved target
+  confidence: 'high'|'med'|'low'
 }
 
 // WalkStep
@@ -196,7 +204,7 @@ Use `performance.now()` checkpoints in `analyzer.js` and log to console in devel
 - Do not add a backend or server. Everything is client-side.
 - Do not add a build step unless the codebase exceeds 5 source files. Prefer a single `index.html`.
 - Do not add a framework. Vanilla JS + CSS variables only.
-- Do not add per-function call graph inference that requires full AST parsing — use file-level heuristics (same-file co-location, import edges).
+- Do not add full AST parsing for the call graph. Per-function call inference is regex-only: extract call sites with a name-followed-by-`(` pattern, then resolve names to definitions via same-file lookup, relative-import disambiguation, or single-name match. Mark ambiguous and unresolved calls visibly so users see the heuristic's confidence.
 - Do not render user-provided file paths or function names as raw HTML — always escape.
 
 ---

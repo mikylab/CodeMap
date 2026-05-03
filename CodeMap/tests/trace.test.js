@@ -1,64 +1,147 @@
 import { test, assertEqual, assertDeepEqual, assertTrue } from './runner.js';
-import { buildTraceTree, fnKey } from '../src/trace-graph.js';
+import { buildTraceTree, fnKey, isEntryPoint, pickEntryForFile } from '../src/trace-graph.js';
 
 function fn(name, file, lineNum, cx = 1) {
-  return { name, file, lineNum, lines: 5, cx };
+  return { name, file, lineNum, lines: 5, cx, calls: [] };
 }
-
-function makeFile(path, fns) {
-  return { name: path.split('/').pop(), path, ext: 'js', lang: 'JavaScript', langColor: '#000', lineCount: 100, fns, imports: [], cx: 1 };
-}
-
-function byPath(files) { return new Map(files.map(f => [f.path, f])); }
+function callsMap(entries) { return new Map(entries); }
+function fnByKey(fns) { return new Map(fns.map(f => [fnKey(f), f])); }
 
 test('trace: null root returns null', () => {
-  assertEqual(buildTraceTree(null, new Map()), null);
+  assertEqual(buildTraceTree(null, new Map(), new Map()), null);
 });
 
-test('trace: root with no co-located fns has empty children', () => {
+test('trace: root with no calls has empty children and reach=1', () => {
   const root = fn('solo', 'a.js', 1);
-  const files = [makeFile('a.js', [root])];
-  const tree = buildTraceTree(root, byPath(files));
+  const tree = buildTraceTree(root, callsMap([[fnKey(root), []]]), fnByKey([root]));
   assertEqual(tree.fn.name, 'solo');
   assertDeepEqual(tree.children, []);
+  assertEqual(tree.subtree.reach, 1);
+  assertEqual(tree.subtree.depth, 0);
 });
 
-test('trace: children are same-file fns ordered by lineNum, root excluded', () => {
-  const a = fn('a', 'x.js', 5);
-  const b = fn('b', 'x.js', 1);
-  const c = fn('c', 'x.js', 10);
-  const files = [makeFile('x.js', [a, b, c])];
-  const tree = buildTraceTree(a, byPath(files));
+test('trace: resolved callees become children with bubbled reach', () => {
+  const a = fn('a', 'x.js', 1);
+  const b = fn('b', 'x.js', 5);
+  const c = fn('c', 'x.js', 9);
+  const calls = callsMap([
+    [fnKey(a), [
+      { name: 'b', target: fnKey(b), confidence: 'high', ambiguous: false, resolved: true },
+      { name: 'c', target: fnKey(c), confidence: 'high', ambiguous: false, resolved: true },
+    ]],
+    [fnKey(b), []], [fnKey(c), []],
+  ]);
+  const tree = buildTraceTree(a, calls, fnByKey([a, b, c]));
   assertDeepEqual(tree.children.map(n => n.fn.name), ['b', 'c']);
+  assertEqual(tree.subtree.reach, 3);
+  assertEqual(tree.subtree.depth, 1);
 });
 
-test('trace: cycle-safe — children of children do not re-include visited fns', () => {
+test('trace: unresolved calls collapse into extCount, not children', () => {
+  const a = fn('a', 'x.js', 1);
+  const calls = callsMap([
+    [fnKey(a), [
+      { name: 'mystery', target: null, confidence: 'low', ambiguous: false, resolved: false },
+      { name: 'getElementById', target: null, confidence: 'low', ambiguous: false, resolved: false },
+    ]],
+  ]);
+  const tree = buildTraceTree(a, calls, fnByKey([a]));
+  assertEqual(tree.children.length, 0);
+  assertEqual(tree.extCount, 2);
+  assertTrue(tree.extNames.includes('mystery'));
+  assertTrue(tree.extNames.includes('getElementById'));
+});
+
+test('trace: hotspots count fns with cx >= 7 in subtree', () => {
+  const a = fn('a', 'x.js', 1, 1);
+  const b = fn('b', 'x.js', 5, 9);  // hotspot
+  const c = fn('c', 'x.js', 9, 12); // hotspot
+  const calls = callsMap([
+    [fnKey(a), [
+      { name: 'b', target: fnKey(b), confidence: 'high', ambiguous: false, resolved: true },
+      { name: 'c', target: fnKey(c), confidence: 'high', ambiguous: false, resolved: true },
+    ]],
+    [fnKey(b), []], [fnKey(c), []],
+  ]);
+  const tree = buildTraceTree(a, calls, fnByKey([a, b, c]));
+  assertEqual(tree.subtree.hotspots, 2);
+});
+
+test('trace: cycle-safe — repeated fn marked as cycle, not re-expanded', () => {
   const a = fn('a', 'x.js', 1);
   const b = fn('b', 'x.js', 2);
-  const files = [makeFile('x.js', [a, b])];
-  const tree = buildTraceTree(a, byPath(files));
+  const calls = callsMap([
+    [fnKey(a), [{ name: 'b', target: fnKey(b), confidence: 'high', ambiguous: false, resolved: true }]],
+    [fnKey(b), [{ name: 'a', target: fnKey(a), confidence: 'high', ambiguous: false, resolved: true }]],
+  ]);
+  const tree = buildTraceTree(a, calls, fnByKey([a, b]));
   assertEqual(tree.children.length, 1);
   assertEqual(tree.children[0].fn.name, 'b');
-  assertDeepEqual(tree.children[0].children, []);
+  assertEqual(tree.children[0].children.length, 1);
+  assertTrue(tree.children[0].children[0].cycle);
 });
 
-test('trace: deterministic — repeated calls produce identical trees', () => {
+test('trace: deterministic — children sorted by call name', () => {
   const a = fn('a', 'x.js', 1);
   const b = fn('b', 'x.js', 2);
   const c = fn('c', 'x.js', 3);
-  const files = [makeFile('x.js', [c, a, b])];
-  const t1 = buildTraceTree(a, byPath(files));
-  const t2 = buildTraceTree(a, byPath(files));
-  assertDeepEqual(JSON.parse(JSON.stringify(t1)), JSON.parse(JSON.stringify(t2)));
+  const calls = callsMap([
+    [fnKey(a), [
+      { name: 'c', target: fnKey(c), confidence: 'high', ambiguous: false, resolved: true },
+      { name: 'b', target: fnKey(b), confidence: 'high', ambiguous: false, resolved: true },
+    ]],
+    [fnKey(b), []], [fnKey(c), []],
+  ]);
+  const tree = buildTraceTree(a, calls, fnByKey([a, b, c]));
+  assertDeepEqual(tree.children.map(n => n.fn.name), ['b', 'c']);
 });
 
-test('trace: missing file (root not in files) yields empty children', () => {
-  const root = fn('orphan', 'gone.js', 1);
-  const tree = buildTraceTree(root, new Map());
-  assertDeepEqual(tree.children, []);
+test('trace: tracks distinct files reached in subtree', () => {
+  const a = fn('a', 'x.js', 1);
+  const b = fn('b', 'y.js', 1);
+  const calls = callsMap([
+    [fnKey(a), [{ name: 'b', target: fnKey(b), confidence: 'med', ambiguous: false, resolved: true }]],
+    [fnKey(b), []],
+  ]);
+  const tree = buildTraceTree(a, calls, fnByKey([a, b]));
+  assertEqual(tree.subtree.files.size, 2);
 });
 
-test('trace: fnKey uniqueness across same-name fns in different files', () => {
+test('isEntryPoint: function called from another file is an entry', () => {
+  const a = fn('handler', 'route.js', 1);
+  const callers = new Map([[fnKey(a), [{ from: 'main.js::start@1', confidence: 'med', ambiguous: false }]]]);
+  assertTrue(isEntryPoint(a, callers));
+});
+
+test('isEntryPoint: function with entry-like name is an entry', () => {
+  const a = fn('main', 'm.js', 1);
+  assertTrue(isEntryPoint(a, new Map([[fnKey(a), [{ from: 'm.js::other@5', confidence: 'high', ambiguous: false }]]])));
+});
+
+test('isEntryPoint: only-internal-callers non-entry-named function is NOT an entry', () => {
+  const a = fn('helper', 'm.js', 1);
+  const callers = new Map([[fnKey(a), [{ from: 'm.js::other@5', confidence: 'high', ambiguous: false }]]]);
+  assertEqual(isEntryPoint(a, callers), false);
+});
+
+test('pickEntryForFile: picks entry with highest reach', () => {
+  const main = fn('main', 'm.js', 1);
+  const helper = fn('helper', 'm.js', 5);
+  const sub = fn('sub', 'm.js', 9);
+  const file = { path: 'm.js', fns: [main, helper, sub] };
+  const calls = callsMap([
+    [fnKey(main), [
+      { name: 'helper', target: fnKey(helper), confidence: 'high', ambiguous: false, resolved: true },
+      { name: 'sub', target: fnKey(sub), confidence: 'high', ambiguous: false, resolved: true },
+    ]],
+    [fnKey(helper), []], [fnKey(sub), []],
+  ]);
+  const callers = new Map();
+  const picked = pickEntryForFile(file, calls, callers, fnByKey([main, helper, sub]));
+  assertEqual(picked.name, 'main');
+});
+
+test('fnKey: uniqueness across same-name fns in different files', () => {
   assertTrue(fnKey({ name: 'x', file: 'a.js', lineNum: 1 }) !==
              fnKey({ name: 'x', file: 'b.js', lineNum: 1 }));
 });

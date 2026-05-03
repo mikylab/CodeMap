@@ -1,6 +1,11 @@
 import { LANG_CONFIG } from './lang-config.js';
 
 const KEYWORDS = new Set('if for while switch return class import export const let var def function async await new try catch finally else do break continue in of'.split(' '));
+const CALL_EXCLUDE = new Set([
+  ...KEYWORDS,
+  ...'typeof instanceof sizeof match throw yield super self this print puts println printf lambda fn struct enum impl mod use defer go synchronized assert raise pass'.split(' '),
+]);
+const CALL_RE = /\b([A-Za-z_]\w*)\s*\(/g;
 const SKIP_DIRS = new Set('node_modules .git dist build .next __pycache__ .venv venv env coverage .cache'.split(' '));
 const SKIP_EXTS = new Set('png jpg jpeg gif svg ico woff woff2 ttf eot lock map zip tar gz'.split(' '));
 
@@ -22,13 +27,14 @@ export function parseFile(name, src, path) {
   const newlines = newlineIndices(src);
   const fns = extractFns(src, cfg, path, newlines);
   const imports = extractImports(src, cfg, path);
+  const localImports = extractLocalImports(src, cfg);
   const cx = clamp((1 + decisionCount(src)) / Math.max(fns.length, 1), 1, 30);
 
   return {
     name, path, ext: extOf(name),
     lang: cfg.name, langColor: cfg.color,
     lineCount: newlines.length + 1,
-    fns, imports, cx,
+    fns, imports, localImports, cx,
   };
 }
 
@@ -58,9 +64,24 @@ function extractFns(src, cfg, path, newlines) {
       lineNum: lineFor(newlines, idx),
       lines: body.lines,
       cx: clamp(decisionCount(body.text) || 1, 1, 30),
+      calls: extractCalls(body.text, name),
     });
   });
   return out;
+}
+
+function extractCalls(bodyText, ownName) {
+  const out = new Set();
+  CALL_RE.lastIndex = 0;
+  let m;
+  while ((m = CALL_RE.exec(bodyText)) !== null) {
+    const name = m[1];
+    if (name.length < 2) continue;
+    if (name === ownName) continue;
+    if (CALL_EXCLUDE.has(name)) continue;
+    out.add(name);
+  }
+  return [...out].sort();
 }
 
 function extractImports(src, cfg, path) {
@@ -72,6 +93,18 @@ function extractImports(src, cfg, path) {
     if (!lib || seen.has(lib)) return;
     seen.add(lib);
     out.push({ from: path, lib });
+  });
+  return out;
+}
+
+function extractLocalImports(src, cfg) {
+  const out = []; const seen = new Set();
+  forEachMatch(src, cfg.imports, raw => {
+    raw = raw.trim();
+    if (!raw.startsWith('.') && !raw.startsWith('/')) return;
+    if (seen.has(raw)) return;
+    seen.add(raw);
+    out.push(raw);
   });
   return out;
 }

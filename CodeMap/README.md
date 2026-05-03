@@ -30,9 +30,19 @@ picker. Files are read locally; nothing leaves your machine.
   Use ←/→ or click progress dots to navigate. Function chips jump to Trace.
 - **Functions** — sortable flat list (by name, lines, or complexity). Clicking a
   row roots the Trace tab at that function.
-- **Trace** — pick a root function and see a same-file co-location tree. The
-  detail pane shows complexity, line info, sibling-function pills, and the file
-  path. Click a `→` pill to re-root.
+- **Trace** — execution map driven from the sidebar. Click a file in the
+  sidebar to expand it inline and see its functions; click a function to
+  trace what it executes. Codemap renders a DAG of every in-codebase
+  function called (transitively), with each node showing file, function,
+  complexity, fan-in/out, and a `+N ext` count for external/library calls
+  (collapsed, not drawn). Edges colored by inference confidence: green =
+  same-file, purple = via local import, gray-dashed = single-name guess.
+  A **breadcrumb trail** at the top tracks every step you take — the green
+  origin marker is where you started; click any crumb to jump back, or use
+  ←/→ buttons. Right panel summarizes the current map's *reach*, *files*,
+  *depth*, and *hotspots*, with click-to-jump pills for the worst offenders.
+  Double-click a node on the map to drill in; click *reset* to start the
+  trail over from the current spot.
 - **Libraries** — every external/stdlib import aggregated, sorted by usage,
   with `stdlib` vs `external` labels.
 
@@ -75,13 +85,13 @@ CodeMap/
 │   ├── parser.js           # parseFile(name, src, path) → ParsedFile
 │   ├── analyzer.js         # cross-file edges + connectivity
 │   ├── walker.js           # generateWalk(state) → WalkStep[]
-│   ├── trace-graph.js      # buildTraceTree(rootFn, byPath)
+│   ├── trace-graph.js      # buildTraceTree(rootFn, callsByFn, fnByKey)
 │   ├── ingest.js           # drag-drop / dir-picker → ParsedFile[]
 │   ├── state.js            # STATE singleton + mutators + indexes
 │   ├── tabs.js             # tab registry, complexity buckets, stdlib set
 │   ├── renderer.js         # tab dispatcher (renderAll)
 │   ├── toolbar.js / sidebar.js / statbar.js / dom.js
-│   └── views/{overview,walk,functions,trace,libraries}.js
+│   └── views/{overview,walk,functions,trace,trace-graph-view,libraries}.js
 └── tests/                  # browser-run tests, no Node required
 ```
 

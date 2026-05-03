@@ -1,80 +1,140 @@
-import { STATE, setTraceRoot, selectPath } from '../state.js';
+import { STATE, setTraceRoot, selectPath, gotoTraceHistory, clearTraceHistory, getTraceRoot } from '../state.js';
 import { cxBucket } from '../tabs.js';
 import { buildTraceTree, fnKey } from '../trace-graph.js';
 import { el, basename } from '../dom.js';
+import { renderTraceMap } from './trace-graph-view.js';
 
 let selectedKey = null;
-let lastRootKey = null;
+let cachedRootKey = null;
+let cachedTree = null;
+let cachedFilesRef = null;
+
+function jumpTo(fn, onChange) {
+  if (!fn) return;
+  setTraceRoot(fn);
+  selectPath(fn.file);
+  selectedKey = fnKey(fn);
+  onChange();
+}
+
+function selectNode(key, onChange) {
+  if (selectedKey === key) return;
+  selectedKey = key;
+  onChange();
+}
 
 export function renderTrace(onChange) {
-  const allFns = STATE.allFns;
-  if (!STATE.files.length || !allFns.length) return splash();
+  if (!STATE.files.length) return splash();
 
-  const root = resolveRoot(allFns);
-  if (root && fnKey(root) !== lastRootKey) {
-    selectedKey = fnKey(root);
-    lastRootKey = fnKey(root);
+  const root = currentRoot();
+  if (!root) return pickPrompt();
+
+  if (selectedKey == null || !STATE.fnByKey.get(selectedKey)) selectedKey = fnKey(root);
+
+  const rootKey = fnKey(root);
+  if (cachedRootKey !== rootKey || cachedFilesRef !== STATE.files) {
+    cachedTree = buildTraceTree(root, STATE.callsByFn, STATE.fnByKey);
+    cachedRootKey = rootKey;
+    cachedFilesRef = STATE.files;
   }
+  const tree = cachedTree;
 
   const wrap = el('div', { cls: 'trace-root' });
-  wrap.appendChild(el('div', {
-    cls: 'view-hint',
-    text: 'Pick a root function — the tree shows other functions in the same file as a proxy call graph (heuristic, no AST). Click a node to inspect.',
-  }));
-  wrap.appendChild(header(allFns, root, onChange));
-  wrap.appendChild(body(root, onChange));
+  wrap.appendChild(breadcrumbs(onChange));
+  wrap.appendChild(hint(root, tree));
+  wrap.appendChild(body(tree, onChange));
   return wrap;
 }
 
+
 function splash() {
   return el('div', { cls: 'upload-splash' }, [
-    el('div', { cls: 'splash-icon', text: '🧭' }),
-    el('div', { cls: 'splash-title', text: 'No trace yet' }),
-    el('div', { cls: 'splash-sub', text: 'Drop a folder, then pick a function to trace.' }),
+    el('div', { cls: 'splash-title', text: 'Drop a folder to begin' }),
+    el('div', { cls: 'splash-sub', text: 'Then pick a file in the sidebar and click a function to trace its execution.' }),
   ]);
 }
 
-function resolveRoot(allFns) {
-  const r = STATE.traceRoot;
-  if (!r) return allFns[0] || null;
-  const hit = allFns.find(fn => fn.name === r.name && fn.file === r.file && fn.lineNum === r.lineNum);
-  return hit || allFns[0] || null;
+function pickPrompt() {
+  return el('div', { cls: 'upload-splash' }, [
+    el('div', { cls: 'splash-title', text: 'Pick a function' }),
+    el('div', { cls: 'splash-sub', text: 'In the sidebar, click a file to expand its functions, then click a function to trace what it executes.' }),
+  ]);
 }
 
-function header(allFns, root, onChange) {
-  const strip = el('div', { cls: 'trace-header' });
-  strip.appendChild(el('span', { cls: 'trace-hd-label', text: 'Root:' }));
-  const sel = el('select', {
-    cls: 'trace-select',
-    on: {
-      change: e => {
-        const fn = allFns[Number(e.target.value)];
-        setTraceRoot(fn);
-        selectedKey = fnKey(fn);
-        onChange();
-      },
-    },
-  });
-  for (let i = 0; i < allFns.length; i++) {
-    const fn = allFns[i];
-    const opt = el('option', { value: String(i), text: `${fn.name} (${basename(fn.file)})` });
-    if (root && fnKey(fn) === fnKey(root)) opt.selected = true;
-    sel.appendChild(opt);
+function currentRoot() {
+  const r = getTraceRoot();
+  return r ? STATE.fnByKey.get(fnKey(r)) || null : null;
+}
+
+function breadcrumbs(onChange) {
+  const strip = el('div', { cls: 'trace-crumbs' });
+  const history = STATE.traceHistory;
+  const idx = STATE.traceHistoryIdx;
+  if (!history.length) return strip;
+
+  // Back / forward buttons
+  strip.appendChild(el('button', {
+    cls: 'crumb-nav', type: 'button', text: '←',
+    title: 'Back to previous function',
+    disabled: idx <= 0,
+    on: { click: () => { gotoTraceHistory(idx - 1); onChange(); } },
+  }));
+  strip.appendChild(el('button', {
+    cls: 'crumb-nav', type: 'button', text: '→',
+    title: 'Forward',
+    disabled: idx >= history.length - 1,
+    on: { click: () => { gotoTraceHistory(idx + 1); onChange(); } },
+  }));
+
+  const trail = el('div', { cls: 'crumb-trail' });
+  for (let i = 0; i < history.length; i++) {
+    const entry = history[i];
+    const isCurrent = i === idx;
+    const isOrigin = i === 0;
+    if (i > 0) trail.appendChild(el('span', { cls: 'crumb-sep', text: '›' }));
+    trail.appendChild(el('button', {
+      cls: `crumb${isCurrent ? ' current' : ''}${isOrigin ? ' origin' : ''}`,
+      type: 'button',
+      title: `${entry.file} · L${entry.lineNum}${isOrigin ? ' (origin)' : ''}`,
+      text: `${entry.name}()`,
+      on: { click: () => { gotoTraceHistory(i); onChange(); } },
+    }));
   }
-  strip.appendChild(sel);
+  strip.appendChild(trail);
+
+  if (history.length > 1) {
+    strip.appendChild(el('button', {
+      cls: 'crumb-clear', type: 'button', text: 'reset',
+      title: 'Clear trail and start fresh from this function',
+      on: {
+        click: () => {
+          clearTraceHistory(STATE.fnByKey.get(fnKey(history[idx])));
+          onChange();
+        },
+      },
+    }));
+  }
   return strip;
 }
 
-function body(root, onChange) {
-  const wrap = el('div', { cls: 'trace-body' });
-  if (!root) {
-    wrap.appendChild(el('div', { cls: 'sb-empty', text: 'no functions' }));
-    return wrap;
-  }
-  const tree = buildTraceTree(root, STATE.byPath);
-  const selected = findNode(tree, selectedKey) || tree;
-  wrap.appendChild(treePane(tree, selected, onChange));
-  wrap.appendChild(detailPane(selected.fn, onChange));
+function hint(root, tree) {
+  const reach = tree.subtree.reach;
+  const depth = tree.subtree.depth;
+  const filesTouched = tree.subtree.files.size;
+  const hotspots = tree.subtree.hotspots;
+  const text = `${root.file} → ${root.name}() touches ${reach} function${reach === 1 ? '' : 's'} across ${filesTouched} file${filesTouched === 1 ? '' : 's'}, max chain depth ${depth}, ${hotspots} complexity hotspot${hotspots === 1 ? '' : 's'}.`;
+  return el('div', { cls: 'view-hint', text });
+}
+
+function body(tree, onChange) {
+  const wrap = el('div', { cls: 'trace-body map-mode' });
+  const selectedNode = findNode(tree, selectedKey) || tree;
+  wrap.appendChild(renderTraceMap(
+    tree, selectedNode,
+    key => selectNode(key, onChange),
+    fn => jumpTo(fn, onChange),
+  ));
+  wrap.appendChild(detailPane(tree, selectedNode, onChange));
   return wrap;
 }
 
@@ -88,68 +148,115 @@ function findNode(node, key) {
   return null;
 }
 
-function treePane(tree, selected, onChange) {
-  const pane = el('div', { cls: 'trace-tree' });
-  walk(tree, 0, pane, selected, onChange);
+function detailPane(tree, selected, onChange) {
+  const pane = el('div', { cls: 'trace-detail' });
+
+  pane.appendChild(el('div', { cls: 'trace-section-label', text: 'Map summary' }));
+  pane.appendChild(summary(tree));
+
+  const hotspots = collectHotspots(tree);
+  if (hotspots.length) {
+    pane.appendChild(el('div', { cls: 'trace-section-label', text: `Hotspots (cx ≥ 7)` }));
+    const list = el('div', { cls: 'trace-pill-row' });
+    for (const fn of hotspots.slice(0, 8)) {
+      list.appendChild(el('button', {
+        cls: 'pill conf-low',
+        type: 'button',
+        text: `${fn.name} (cx:${fn.cx})`,
+        title: `${basename(fn.file)} · L${fn.lineNum}`,
+        on: { click: () => jumpTo(fn, onChange) },
+      }));
+    }
+    pane.appendChild(list);
+  }
+
+  pane.appendChild(el('div', { cls: 'trace-section-label', text: 'Selected node' }));
+  pane.appendChild(nodeDetail(selected, onChange));
+
   return pane;
 }
 
-function walk(node, depth, pane, selected, onChange) {
-  pane.appendChild(treeNode(node, depth, selected, onChange));
-  for (const c of node.children) walk(c, depth + 1, pane, selected, onChange);
+function summary(tree) {
+  const grid = el('div', { cls: 'trace-summary-grid' });
+  const cells = [
+    { label: 'reach',    value: String(tree.subtree.reach),       hint: 'Functions reachable from this entry.' },
+    { label: 'files',    value: String(tree.subtree.files.size),  hint: 'Distinct files involved in this execution path.' },
+    { label: 'depth',    value: String(tree.subtree.depth),       hint: 'Longest call chain from this entry.', warn: tree.subtree.depth >= 5 },
+    { label: 'hotspots', value: String(tree.subtree.hotspots),    hint: 'Functions in the chain with cyclomatic complexity ≥ 7.', warn: tree.subtree.hotspots > 0 },
+  ];
+  for (const c of cells) {
+    const cell = el('div', { cls: `trace-summary-cell${c.warn ? ' warn' : ''}`, title: c.hint });
+    cell.appendChild(el('div', { cls: 'trace-summary-val', text: c.value }));
+    cell.appendChild(el('div', { cls: 'trace-summary-lbl', text: c.label }));
+    grid.appendChild(cell);
+  }
+  return grid;
 }
 
-function treeNode(node, depth, selected, onChange) {
-  const fn = node.fn;
-  const wrap = el('div', {
-    cls: `trace-node${fnKey(fn) === fnKey(selected.fn) ? ' active' : ''}`,
-    style: { marginLeft: `${depth * 16}px` },
-    on: { click: () => { selectedKey = fnKey(fn); onChange(); } },
-  });
-  const conn = el('div', { cls: 'trace-conn' });
-  const dotCls = `trace-dot${node.children.length ? ' filled' : ''}${fn.cx >= 7 ? ' warn' : ''}`;
-  conn.appendChild(el('div', { cls: dotCls }));
-  wrap.appendChild(conn);
-  const text = el('div', { cls: 'trace-node-text' });
-  text.appendChild(el('div', { cls: 'trace-node-name', text: fn.name }));
-  text.appendChild(el('div', { cls: 'trace-node-sub', text: `${basename(fn.file)} · L${fn.lineNum} · cx:${fn.cx}` }));
-  wrap.appendChild(text);
-  return wrap;
-}
+function nodeDetail(selected, onChange) {
+  const wrap = el('div', { cls: 'trace-node-detail' });
+  const fn = selected.fn;
 
-function detailPane(fn, onChange) {
-  const pane = el('div', { cls: 'trace-detail' });
-  pane.appendChild(el('div', { cls: 'trace-fn-name', text: `${fn.name}()` }));
+  const title = el('div', { cls: 'trace-fn-name' });
+  title.appendChild(document.createTextNode(`${fn.name}()`));
+  if (selected.cycle) title.appendChild(el('span', { cls: 'conf-badge conf-cycle', text: 'cycle' }));
+  if (selected.ambiguous) title.appendChild(el('span', { cls: 'conf-badge conf-amb', text: 'ambiguous' }));
+  wrap.appendChild(title);
+
   const meta = el('div', { cls: 'trace-fn-meta' });
   meta.appendChild(document.createTextNode(`${basename(fn.file)} · line ${fn.lineNum} · ${fn.lines} lines · complexity `));
   meta.appendChild(el('span', { cls: `cx-${cxBucket(fn.cx)}-fg`, text: String(fn.cx) }));
-  pane.appendChild(meta);
+  wrap.appendChild(meta);
 
-  const file = STATE.byPath.get(fn.file);
-  const siblings = file ? file.fns.filter(f => fnKey(f) !== fnKey(fn)) : [];
-  if (siblings.length) {
-    pane.appendChild(el('div', { cls: 'trace-section-label', text: 'Same-file functions' }));
+  const key = fnKey(fn);
+  const fanIn = STATE.fanIn.get(key) || 0;
+  const fanOut = STATE.fanOut.get(key) || 0;
+  const badges = el('div', { cls: 'trace-badge-row' });
+  badges.appendChild(el('span', { cls: 'trace-badge', title: 'Number of functions that call this one.', text: `← ${fanIn} callers` }));
+  badges.appendChild(el('span', { cls: 'trace-badge', title: 'Number of distinct in-codebase functions this one calls.', text: `→ ${fanOut} calls` }));
+  if (selected.extCount) {
+    badges.appendChild(el('span', { cls: 'trace-badge', title: `External / library calls: ${selected.extNames.join(', ')}${selected.extCount > selected.extNames.length ? ', …' : ''}`, text: `+${selected.extCount} ext` }));
+  }
+  wrap.appendChild(badges);
+
+  const callers = STATE.callersByFn.get(key) || [];
+  if (callers.length) {
+    wrap.appendChild(el('div', { cls: 'trace-section-label small', text: 'Callers' }));
     const row = el('div', { cls: 'trace-pill-row' });
-    for (const s of siblings) {
+    for (const c of callers.slice(0, 8)) {
+      const callerFn = STATE.fnByKey.get(c.from);
+      if (!callerFn) continue;
       row.appendChild(el('button', {
-        cls: 'pill out', type: 'button', text: `${s.name} →`,
-        on: {
-          click: () => {
-            setTraceRoot(s);
-            selectedKey = fnKey(s);
-            onChange();
-          },
-        },
+        cls: `pill in conf-${c.confidence}`,
+        type: 'button',
+        text: `← ${callerFn.name}`,
+        title: `${callerFn.file} · L${callerFn.lineNum}`,
+        on: { click: () => jumpTo(callerFn, onChange) },
       }));
     }
-    pane.appendChild(row);
+    if (callers.length > 8) row.appendChild(el('span', { cls: 'trace-entry-more', text: `+${callers.length - 8} more` }));
+    wrap.appendChild(row);
   }
 
-  pane.appendChild(el('div', { cls: 'trace-section-label', text: 'File' }));
-  const filePath = el('button', {
+  wrap.appendChild(el('div', { cls: 'trace-section-label small', text: 'File' }));
+  wrap.appendChild(el('button', {
     cls: 'trace-file-link', type: 'button', text: fn.file,
     on: { click: () => { selectPath(fn.file); onChange(); } },
-  });
-  pane.appendChild(filePath);
-  return pane;
+  }));
+  return wrap;
+}
+
+function collectHotspots(tree) {
+  const seen = new Set();
+  const out = [];
+  function walk(n) {
+    const k = fnKey(n.fn);
+    if (seen.has(k)) return;
+    seen.add(k);
+    if (n.fn.cx >= 7) out.push(n.fn);
+    for (const c of n.children) walk(c);
+  }
+  walk(tree);
+  out.sort((a, b) => b.cx - a.cx);
+  return out;
 }
