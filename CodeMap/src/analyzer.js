@@ -39,9 +39,30 @@ export function analyze(files) {
   }
 
   const callGraph = buildCallGraph(files);
+  const fileGraph = buildFileImportGraph(files);
 
   measure('analyze', t0, `files=${files.length} libs=${libToPaths.size} edges=${unique.length} callEdges=${callGraph.callEdges.length}`);
-  return { edges: unique, degree, libToPaths, ...callGraph };
+  return { edges: unique, degree, libToPaths, ...callGraph, ...fileGraph };
+}
+
+function buildFileImportGraph(files) {
+  const byPath = new Map(files.map(f => [f.path, f]));
+  const fileImports = new Map();
+  const fileImporters = new Map();
+  for (const f of files) {
+    const targets = new Set();
+    for (const spec of (f.localImports || [])) {
+      const t = resolveLocalImport(f.path, spec, byPath);
+      if (t && t !== f.path) targets.add(t);
+    }
+    fileImports.set(f.path, targets);
+    for (const t of targets) {
+      let s = fileImporters.get(t);
+      if (!s) fileImporters.set(t, s = new Set());
+      s.add(f.path);
+    }
+  }
+  return { fileImports, fileImporters };
 }
 
 const RESOLVE_EXTS = ['js', 'jsx', 'ts', 'tsx', 'py', 'rb', 'go', 'rs', 'java'];

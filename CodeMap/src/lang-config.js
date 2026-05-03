@@ -44,3 +44,27 @@ export const LANG_CONFIG = {
 LANG_CONFIG.jsx = { ...LANG_CONFIG.js, name: 'JSX' };
 LANG_CONFIG.ts  = { ...LANG_CONFIG.js, name: 'TypeScript', color: '#185FA5' };
 LANG_CONFIG.tsx = { ...LANG_CONFIG.js, name: 'TSX',        color: '#185FA5' };
+
+LANG_CONFIG.html = {
+  name: 'HTML', color: '#E04E2A', comment: '<!--',
+  fn: [],
+  imports: [
+    /<script[^>]+src=["']([^"']+)["']/gim,
+    /<link[^>]+href=["']([^"']+)["']/gim,
+  ],
+};
+LANG_CONFIG.htm = { ...LANG_CONFIG.html };
+
+LANG_CONFIG.css = {
+  name: 'CSS', color: '#1F7AC2', comment: '/*',
+  fn: [],
+  imports: [
+    /@import\s+(?:url\()?["']([^"')]+)["']\)?/gm,
+  ],
+};
+LANG_CONFIG.scss = { ...LANG_CONFIG.css, name: 'SCSS', color: '#C26593' };
+LANG_CONFIG.sass = { ...LANG_CONFIG.css, name: 'Sass', color: '#C26593' };
+LANG_CONFIG.less = { ...LANG_CONFIG.css, name: 'Less', color: '#264C82' };
+
+LANG_CONFIG.vue = { ...LANG_CONFIG.js, name: 'Vue',     color: '#41B883' };
+LANG_CONFIG.svelte = { ...LANG_CONFIG.js, name: 'Svelte', color: '#FF3E00' };

@@ -162,6 +162,25 @@ button, input, select { font: inherit; color: inherit; }
 }
 .sb-fn-cx { font-size: 9px; flex-shrink: 0; }
 
+.dir-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 14px 4px 10px; cursor: pointer;
+  font-family: var(--font-mono);
+  border-left: 2px solid transparent;
+  min-width: 0;
+}
+.dir-item:hover { background: var(--bg3); }
+.dir-icon { font-size: 11px; flex-shrink: 0; }
+.dir-name {
+  font-size: 11px; flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text); font-weight: 500;
+}
+.dir-count {
+  font-size: 9px; color: var(--muted); flex-shrink: 0;
+  background: var(--bg3); border-radius: 3px; padding: 1px 5px;
+}
+
 /* ─── trace: breadcrumb trail ─────────────────────────────────────────── */
 .trace-crumbs {
   display: flex; align-items: center; gap: 6px;
@@ -402,6 +421,40 @@ button, input, select { font: inherit; color: inherit; }
   padding: 2px 6px; border-radius: 3px;
   min-width: 32px; text-align: center;
 }
+.fn-row.expanded { background: var(--bg2); }
+.fn-row .sb-twirl { font-size: 10px; }
+.fn-trace-btn {
+  font-family: var(--font-mono); font-size: 10px;
+  padding: 2px 8px; border-radius: 3px;
+  border: 0.5px solid var(--border2); background: transparent; color: var(--muted);
+  cursor: pointer; flex-shrink: 0;
+  transition: all 0.15s;
+}
+.fn-trace-btn:hover { color: var(--accent); border-color: var(--accent); }
+.fn-source {
+  background: var(--bg2);
+  border-bottom: 0.5px solid var(--border);
+  padding: 8px 12px 12px;
+  overflow-x: auto;
+}
+.fn-source-pre {
+  font-family: var(--font-mono); font-size: 11px; line-height: 1.5;
+  margin: 0; color: var(--text);
+  background: var(--bg); border: 0.5px solid var(--border2);
+  border-radius: 4px; padding: 8px 0;
+  overflow-x: auto;
+}
+.fn-source-line { display: flex; padding: 0 10px; }
+.fn-source-line:hover { background: var(--bg2); }
+.fn-source-num {
+  color: var(--muted); flex-shrink: 0; padding-right: 12px;
+  text-align: right; min-width: 36px;
+  user-select: none;
+}
+.fn-source-code { white-space: pre; }
+.fn-source-empty {
+  font-family: var(--font-mono); font-size: 11px; color: var(--muted); font-style: italic;
+}
 
 /* ─── libraries ────────────────────────────────────────────────────────── */
 .lib-grid {
@@ -580,6 +633,9 @@ button, input, select { font: inherit; color: inherit; }
   position: relative; background: var(--bg); min-width: 0; min-height: 0;
 }
 .graph-canvas { display: block; width: 100%; height: 100%; }
+.file-trace-host { overflow: auto; border-right: 0.5px solid var(--border2); }
+.trace-svg-node.file-node rect { stroke-width: 1; }
+.trace-svg-node.file-node.active rect { stroke-width: 2.5; }
 .graph-info {
   border-left: 0.5px solid var(--border2);
   background: var(--bg2);
