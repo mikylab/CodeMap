@@ -22,7 +22,7 @@
   </div>
   <input id="dir-picker" type="file" webkitdirectory multiple style="display:none" />
   <script type="module">
-    import { ingestFromDrop, newSkipped } from './src/ingest.js';
+    import { ingestFromDrop, newSkipped, noteTooLarge, MAX_BYTES } from './src/ingest.js';
     import { parseFile } from './src/parser.js';
     import { setFiles, setSkipped, setActiveTab, selectFileByOffset, STATE } from './src/state.js';
     import { TABS } from './src/tabs.js';
@@ -37,10 +37,9 @@
     function showOverlay(v) { overlay.style.display = v ? 'flex' : 'none'; }
 
     function renderWarnings() {
-      const s = STATE.skipped || { tooLarge: [], unsupported: 0 };
-      const big = s.tooLarge.length;
+      const big = STATE.skipped.tooLargeCount;
       if (!big) { warnbar.hidden = true; warnbar.textContent = ''; return; }
-      const example = s.tooLarge[0];
+      const example = STATE.skipped.tooLarge[0];
       const more = big > 1 ? ` (+${big - 1} more)` : '';
       warnbar.textContent =
         `Skipped ${big} file${big === 1 ? '' : 's'} > 2MB — e.g. ${example.path}${more}`;
@@ -71,17 +70,16 @@
     });
 
     picker.addEventListener('change', async e => {
-      const list = [...e.target.files];
-      const out = [];
       const skipped = newSkipped();
       const t0 = mark();
-      for (const f of list) {
+      const parsed = await Promise.all([...e.target.files].map(async f => {
         const path = f.webkitRelativePath || f.name;
-        if (f.size > 2_000_000) { skipped.tooLarge.push({ path, bytes: f.size }); continue; }
-        const src = await f.text();
-        const parsed = parseFile(f.name, src, path);
-        if (parsed) out.push(parsed); else skipped.unsupported++;
-      }
+        if (f.size > MAX_BYTES) { noteTooLarge(skipped, path, f.size); return null; }
+        const p = parseFile(f.name, await f.text(), path);
+        if (!p) skipped.unsupported++;
+        return p;
+      }));
+      const out = parsed.filter(Boolean);
       measure('ingest(picker)', t0, `parsed=${out.length}`);
       ingestComplete(out, skipped);
     });
@@ -90,23 +88,19 @@
       if (e.target.matches('input, textarea, select, [contenteditable]')) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
-      // Walk navigation
       if (e.key === 'ArrowLeft' || e.key === '[') { e.preventDefault(); stepWalk(-1); return; }
       if (e.key === 'ArrowRight' || e.key === ']') { e.preventDefault(); stepWalk(1); return; }
 
-      // Tab switching: 1..6
       if (/^[1-6]$/.test(e.key)) {
         const t = TABS[Number(e.key) - 1];
         if (t && t.enabled) { e.preventDefault(); setActiveTab(t.id); renderAll(); }
         return;
       }
 
-      // Sidebar nav
       if (e.key === 'j' || e.key === 'k') {
         e.preventDefault();
         selectFileByOffset(e.key === 'j' ? 1 : -1);
         renderAll();
-        return;
       }
     });
 

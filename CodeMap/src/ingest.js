@@ -1,9 +1,15 @@
 import { shouldSkipPath, parseFile } from './parser.js';
 import { mark, measure } from './perf.js';
 
-const MAX_BYTES = 2_000_000;
+export const MAX_BYTES = 2_000_000;
+const MAX_SKIPPED_SAMPLES = 50;
 
-export function newSkipped() { return { tooLarge: [], unsupported: 0 }; }
+export function newSkipped() { return { tooLarge: [], tooLargeCount: 0, unsupported: 0 }; }
+
+export function noteTooLarge(skipped, path, bytes) {
+  skipped.tooLargeCount++;
+  if (skipped.tooLarge.length < MAX_SKIPPED_SAMPLES) skipped.tooLarge.push({ path, bytes });
+}
 
 export async function ingestFromDrop(dataTransfer) {
   const t0 = mark();
@@ -16,7 +22,7 @@ export async function ingestFromDrop(dataTransfer) {
     if (it.kind === 'file') return readFileItem(it.getAsFile(), '', out, skipped);
     return null;
   }));
-  measure('ingest', t0, `parsed=${out.length} tooLarge=${skipped.tooLarge.length} unsupported=${skipped.unsupported}`);
+  measure('ingest', t0, `parsed=${out.length} tooLarge=${skipped.tooLargeCount} unsupported=${skipped.unsupported}`);
   return { files: out, skipped };
 }
 
@@ -41,7 +47,7 @@ async function walkEntry(entry, prefix, out, skipped) {
 async function readFileItem(file, prefix, out, skipped) {
   const path = prefix + file.name;
   if (shouldSkipPath(path)) return;
-  if (file.size > MAX_BYTES) { skipped.tooLarge.push({ path, bytes: file.size }); return; }
+  if (file.size > MAX_BYTES) { noteTooLarge(skipped, path, file.size); return; }
   const src = await file.text();
   const parsed = parseFile(file.name, src, path);
   if (parsed) out.push(parsed);
