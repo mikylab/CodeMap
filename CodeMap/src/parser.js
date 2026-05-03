@@ -90,6 +90,7 @@ function extractImports(src, cfg, path) {
   forEachMatch(src, cfg.imports, raw => {
     raw = raw.trim();
     if (raw.startsWith('.') || raw.startsWith('/')) return;
+    if (/^https?:\/\//i.test(raw) || raw.startsWith('//')) return;
     const lib = raw.split(/[/.]/)[0];
     if (!lib || seen.has(lib)) return;
     seen.add(lib);

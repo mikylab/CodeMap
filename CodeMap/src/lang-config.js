@@ -68,15 +68,3 @@ LANG_CONFIG.less = { ...LANG_CONFIG.css, name: 'Less', color: '#264C82' };
 
 LANG_CONFIG.vue = { ...LANG_CONFIG.js, name: 'Vue',     color: '#41B883' };
 LANG_CONFIG.svelte = { ...LANG_CONFIG.js, name: 'Svelte', color: '#FF3E00' };
-
-LANG_CONFIG.json = { name: 'JSON', color: '#888780', comment: '//', fn: [], imports: [] };
-LANG_CONFIG.md   = { name: 'Markdown', color: '#888780', comment: '<!--', fn: [], imports: [] };
-LANG_CONFIG.yml  = { name: 'YAML', color: '#888780', comment: '#', fn: [], imports: [] };
-LANG_CONFIG.yaml = { ...LANG_CONFIG.yml };
-LANG_CONFIG.toml = { name: 'TOML', color: '#888780', comment: '#', fn: [], imports: [] };
-LANG_CONFIG.sh   = {
-  name: 'Shell', color: '#5DA642', comment: '#',
-  fn: [/(?:function\s+)?(\w+)\s*\(\s*\)\s*\{/gm],
-  imports: [/(?:^|\s)(?:source|\.)\s+["']?([^\s"']+)["']?/gm],
-};
-LANG_CONFIG.bash = { ...LANG_CONFIG.sh, name: 'Bash' };
