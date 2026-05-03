@@ -2,60 +2,98 @@ import { test, assertEqual, assertDeepEqual, assertTrue } from './runner.js';
 import { buildTraceTree, fnKey } from '../src/trace-graph.js';
 
 function fn(name, file, lineNum, cx = 1) {
-  return { name, file, lineNum, lines: 5, cx };
+  return { name, file, lineNum, lines: 5, cx, calls: [] };
 }
 
-function makeFile(path, fns) {
-  return { name: path.split('/').pop(), path, ext: 'js', lang: 'JavaScript', langColor: '#000', lineCount: 100, fns, imports: [], cx: 1 };
+function callsMap(entries) {
+  // entries: [[fnKey, [{name, target, confidence, ambiguous?, resolved}]], ...]
+  return new Map(entries);
 }
 
-function byPath(files) { return new Map(files.map(f => [f.path, f])); }
+function fnByKey(fns) { return new Map(fns.map(f => [fnKey(f), f])); }
 
 test('trace: null root returns null', () => {
-  assertEqual(buildTraceTree(null, new Map()), null);
+  assertEqual(buildTraceTree(null, new Map(), new Map()), null);
 });
 
-test('trace: root with no co-located fns has empty children', () => {
+test('trace: root with no calls has empty children', () => {
   const root = fn('solo', 'a.js', 1);
-  const files = [makeFile('a.js', [root])];
-  const tree = buildTraceTree(root, byPath(files));
+  const tree = buildTraceTree(root, callsMap([[fnKey(root), []]]), fnByKey([root]));
   assertEqual(tree.fn.name, 'solo');
   assertDeepEqual(tree.children, []);
 });
 
-test('trace: children are same-file fns ordered by lineNum, root excluded', () => {
-  const a = fn('a', 'x.js', 5);
-  const b = fn('b', 'x.js', 1);
-  const c = fn('c', 'x.js', 10);
-  const files = [makeFile('x.js', [a, b, c])];
-  const tree = buildTraceTree(a, byPath(files));
+test('trace: resolved callees become children', () => {
+  const a = fn('a', 'x.js', 1);
+  const b = fn('b', 'x.js', 5);
+  const c = fn('c', 'x.js', 9);
+  const calls = callsMap([
+    [fnKey(a), [
+      { name: 'b', target: fnKey(b), confidence: 'high', ambiguous: false, resolved: true },
+      { name: 'c', target: fnKey(c), confidence: 'high', ambiguous: false, resolved: true },
+    ]],
+    [fnKey(b), []],
+    [fnKey(c), []],
+  ]);
+  const tree = buildTraceTree(a, calls, fnByKey([a, b, c]));
   assertDeepEqual(tree.children.map(n => n.fn.name), ['b', 'c']);
 });
 
-test('trace: cycle-safe — children of children do not re-include visited fns', () => {
+test('trace: unresolved call appears as leaf placeholder', () => {
   const a = fn('a', 'x.js', 1);
-  const b = fn('b', 'x.js', 2);
-  const files = [makeFile('x.js', [a, b])];
-  const tree = buildTraceTree(a, byPath(files));
+  const calls = callsMap([
+    [fnKey(a), [
+      { name: 'mystery', target: null, confidence: 'low', ambiguous: false, resolved: false },
+    ]],
+  ]);
+  const tree = buildTraceTree(a, calls, fnByKey([a]));
   assertEqual(tree.children.length, 1);
-  assertEqual(tree.children[0].fn.name, 'b');
-  assertDeepEqual(tree.children[0].children, []);
+  assertTrue(tree.children[0].unresolved);
+  assertEqual(tree.children[0].fn.name, 'mystery');
 });
 
-test('trace: deterministic — repeated calls produce identical trees', () => {
+test('trace: ambiguous edges propagate the ambiguous flag', () => {
+  const a = fn('a', 'x.js', 1);
+  const b = fn('b', 'y.js', 1);
+  const calls = callsMap([
+    [fnKey(a), [{ name: 'b', target: fnKey(b), confidence: 'low', ambiguous: true, resolved: true }]],
+    [fnKey(b), []],
+  ]);
+  const tree = buildTraceTree(a, calls, fnByKey([a, b]));
+  assertTrue(tree.children[0].ambiguous);
+});
+
+test('trace: cycle-safe — visited fn not re-expanded', () => {
+  const a = fn('a', 'x.js', 1);
+  const b = fn('b', 'x.js', 2);
+  const calls = callsMap([
+    [fnKey(a), [{ name: 'b', target: fnKey(b), confidence: 'high', ambiguous: false, resolved: true }]],
+    [fnKey(b), [{ name: 'a', target: fnKey(a), confidence: 'high', ambiguous: false, resolved: true }]],
+  ]);
+  const tree = buildTraceTree(a, calls, fnByKey([a, b]));
+  assertEqual(tree.children.length, 1);
+  assertEqual(tree.children[0].fn.name, 'b');
+  // b's call to a should be detected as a cycle, not expanded
+  assertEqual(tree.children[0].children.length, 1);
+  assertTrue(tree.children[0].children[0].cycle);
+});
+
+test('trace: deterministic — children sorted by call name', () => {
   const a = fn('a', 'x.js', 1);
   const b = fn('b', 'x.js', 2);
   const c = fn('c', 'x.js', 3);
-  const files = [makeFile('x.js', [c, a, b])];
-  const t1 = buildTraceTree(a, byPath(files));
-  const t2 = buildTraceTree(a, byPath(files));
+  const calls = callsMap([
+    [fnKey(a), [
+      { name: 'c', target: fnKey(c), confidence: 'high', ambiguous: false, resolved: true },
+      { name: 'b', target: fnKey(b), confidence: 'high', ambiguous: false, resolved: true },
+    ]],
+    [fnKey(b), []],
+    [fnKey(c), []],
+  ]);
+  const t1 = buildTraceTree(a, calls, fnByKey([a, b, c]));
+  const t2 = buildTraceTree(a, calls, fnByKey([a, b, c]));
   assertDeepEqual(JSON.parse(JSON.stringify(t1)), JSON.parse(JSON.stringify(t2)));
-});
-
-test('trace: missing file (root not in files) yields empty children', () => {
-  const root = fn('orphan', 'gone.js', 1);
-  const tree = buildTraceTree(root, new Map());
-  assertDeepEqual(tree.children, []);
+  assertDeepEqual(t1.children.map(n => n.fn.name), ['b', 'c']);
 });
 
 test('trace: fnKey uniqueness across same-name fns in different files', () => {

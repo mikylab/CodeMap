@@ -431,6 +431,105 @@ button, input, select { font: inherit; color: inherit; }
 }
 .trace-file-link:hover { color: var(--accent); }
 
+/* ─── trace: view toggle ───────────────────────────────────────────────── */
+.trace-view-toggle {
+  display: flex; gap: 2px; background: var(--bg3);
+  padding: 2px; border-radius: 5px;
+}
+.trace-view-btn {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  padding: 3px 9px; border-radius: 3px; border: none;
+  background: transparent; color: var(--muted); cursor: pointer;
+  transition: all 0.15s;
+}
+.trace-view-btn.active {
+  background: var(--bg); color: var(--text);
+  box-shadow: 0 0.5px 2px rgba(0,0,0,.1);
+}
+
+/* ─── trace: confidence + flag styles ─────────────────────────────────── */
+.trace-dot.conf-med   { border-color: var(--purple); }
+.trace-dot.conf-low   { border-color: var(--muted); border-style: dashed; }
+.trace-dot.unresolved { border-color: var(--muted); background: transparent; border-style: dotted; }
+.trace-dot.ambiguous  { border-color: var(--purple); background: var(--purple); }
+
+.trace-node.unresolved { opacity: 0.7; cursor: default; }
+.trace-node.unresolved:hover { background: transparent; }
+
+.conf-badge {
+  display: inline-block; margin-left: 6px;
+  font-family: var(--font-mono); font-size: 9px;
+  padding: 0 5px; border-radius: 3px;
+  border: 0.5px solid var(--border2); color: var(--muted);
+  text-transform: lowercase; letter-spacing: 0.04em;
+  vertical-align: middle;
+}
+.conf-badge.conf-high  { border-color: var(--success); color: var(--success); }
+.conf-badge.conf-med   { border-color: var(--purple);  color: var(--purple); }
+.conf-badge.conf-low   { border-color: var(--muted);   color: var(--muted); }
+.conf-badge.conf-amb   { border-color: var(--warn);    color: var(--warn); }
+.conf-badge.conf-cycle { border-color: var(--danger);  color: var(--danger); }
+
+.trace-badge-row {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;
+}
+.trace-badge {
+  font-family: var(--font-mono); font-size: 10px;
+  padding: 2px 7px; border-radius: 3px;
+  border: 0.5px solid var(--border2); background: var(--bg2); color: var(--muted);
+}
+.trace-badge.conf-high { border-color: var(--success); color: var(--success); }
+.trace-badge.conf-med  { border-color: var(--purple);  color: var(--purple); }
+.trace-badge.conf-low  { border-color: var(--muted);   color: var(--muted); }
+.trace-badge.conf-amb  { border-color: var(--warn);    color: var(--warn); }
+
+.pill.conf-high { border-color: var(--success); color: var(--success); }
+.pill.conf-med  { border-color: var(--purple);  color: var(--purple); }
+.pill.conf-low  { border-color: var(--muted);   color: var(--muted); }
+.pill.unresolved { border-style: dashed; color: var(--muted); }
+.pill.amb { border-style: dashed; }
+
+/* ─── trace: graph view ────────────────────────────────────────────────── */
+.trace-body.graph-mode { grid-template-columns: 1fr 280px; }
+.trace-graph-host {
+  overflow: auto;
+  background: var(--bg);
+  border-right: 0.5px solid var(--border2);
+  min-width: 0; min-height: 0;
+}
+.trace-svg { display: block; }
+.trace-svg-node rect {
+  fill: var(--bg2);
+  stroke: var(--border2); stroke-width: 0.5;
+  transition: stroke 0.1s, fill 0.1s;
+}
+.trace-svg-node:hover rect { stroke: var(--accent); }
+.trace-svg-node.active rect { stroke: var(--accent); stroke-width: 1.5; fill: var(--bg3); }
+.trace-svg-node.warn rect { stroke: var(--danger); }
+.trace-svg-node.unresolved rect {
+  fill: transparent; stroke-dasharray: 3 3; stroke: var(--muted);
+}
+.trace-svg-node.ambiguous rect { stroke: var(--warn); stroke-dasharray: 4 2; }
+.trace-svg-name {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+  fill: var(--text);
+}
+.trace-svg-node.unresolved .trace-svg-name { fill: var(--muted); }
+.trace-svg-sub {
+  font-family: var(--font-mono); font-size: 9px; fill: var(--muted);
+}
+.trace-svg-edge {
+  fill: none; stroke-width: 1.2;
+}
+.trace-svg-edge.conf-high { stroke: var(--success); }
+.trace-svg-edge.conf-med  { stroke: var(--purple); }
+.trace-svg-edge.conf-low  { stroke: var(--muted); stroke-dasharray: 4 3; opacity: 0.7; }
+.trace-svg-edge.conf-amb  { stroke: var(--warn);  stroke-dasharray: 5 2; }
+.trace-svg-arrow.conf-high { fill: var(--success); }
+.trace-svg-arrow.conf-med  { fill: var(--purple); }
+.trace-svg-arrow.conf-low  { fill: var(--muted); }
+.trace-svg-arrow.conf-amb  { fill: var(--warn); }
+
 /* ─── graph ────────────────────────────────────────────────────────────── */
 .graph-root { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .graph-stage {

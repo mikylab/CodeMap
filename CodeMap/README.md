@@ -30,9 +30,12 @@ picker. Files are read locally; nothing leaves your machine.
   Use ←/→ or click progress dots to navigate. Function chips jump to Trace.
 - **Functions** — sortable flat list (by name, lines, or complexity). Clicking a
   row roots the Trace tab at that function.
-- **Trace** — pick a root function and see a same-file co-location tree. The
-  detail pane shows complexity, line info, sibling-function pills, and the file
-  path. Click a `→` pill to re-root.
+- **Trace** — pick a root function and see its execution path: regex-inferred
+  callees, expanded across files via import disambiguation. Toggle between
+  **Tree** (indented call hierarchy) and **Graph** (SVG DAG with arrows). Each
+  edge is colored by confidence — `same-file` (green), `imported` (purple),
+  `guess` (gray dashed); ambiguous and unresolved calls are flagged. The detail
+  pane shows complexity, fan-in / fan-out, callers, and resolved callees.
 - **Libraries** — every external/stdlib import aggregated, sorted by usage,
   with `stdlib` vs `external` labels.
 
@@ -75,13 +78,13 @@ CodeMap/
 │   ├── parser.js           # parseFile(name, src, path) → ParsedFile
 │   ├── analyzer.js         # cross-file edges + connectivity
 │   ├── walker.js           # generateWalk(state) → WalkStep[]
-│   ├── trace-graph.js      # buildTraceTree(rootFn, byPath)
+│   ├── trace-graph.js      # buildTraceTree(rootFn, callsByFn, fnByKey)
 │   ├── ingest.js           # drag-drop / dir-picker → ParsedFile[]
 │   ├── state.js            # STATE singleton + mutators + indexes
 │   ├── tabs.js             # tab registry, complexity buckets, stdlib set
 │   ├── renderer.js         # tab dispatcher (renderAll)
 │   ├── toolbar.js / sidebar.js / statbar.js / dom.js
-│   └── views/{overview,walk,functions,trace,libraries}.js
+│   └── views/{overview,walk,functions,trace,trace-graph-view,libraries}.js
 └── tests/                  # browser-run tests, no Node required
 ```
 

@@ -165,3 +165,44 @@ test('per-fn cx is clamped to [1,30]', () => {
   const out = parseFile('a.js', `function noop(){}\n`, 'a.js');
   assertTrue(out.fns[0].cx >= 1 && out.fns[0].cx <= 30);
 });
+
+test('parser: extracts call sites from function body (js)', () => {
+  const src = `function howMany(xs) {\n  const n = count(xs);\n  return isEven(n);\n}\n`;
+  const out = parseFile('a.js', src, 'a.js');
+  const fn = out.fns.find(f => f.name === 'howMany');
+  assertTrue(Array.isArray(fn.calls));
+  assertTrue(fn.calls.includes('count'));
+  assertTrue(fn.calls.includes('isEven'));
+});
+
+test('parser: call extraction excludes control-flow keywords', () => {
+  const src = `function go(x) {\n  if (x) { while(x) {} }\n  return foo(x);\n}\n`;
+  const out = parseFile('a.js', src, 'a.js');
+  const fn = out.fns[0];
+  assertFalse(fn.calls.includes('if'));
+  assertFalse(fn.calls.includes('while'));
+  assertFalse(fn.calls.includes('return'));
+  assertTrue(fn.calls.includes('foo'));
+});
+
+test('parser: call extraction excludes self-reference', () => {
+  const src = `def foo():\n    return foo() + bar()\n`;
+  const out = parseFile('m.py', src, 'm.py');
+  const fn = out.fns.find(f => f.name === 'foo');
+  assertFalse(fn.calls.includes('foo'));
+  assertTrue(fn.calls.includes('bar'));
+});
+
+test('parser: localImports captures relative specs', () => {
+  const src = `import x from './foo';\nimport y from '../bar/baz';\nimport z from 'react';\n`;
+  const out = parseFile('a.js', src, 'src/a.js');
+  assertTrue(out.localImports.includes('./foo'));
+  assertTrue(out.localImports.includes('../bar/baz'));
+  assertFalse(out.localImports.includes('react'));
+});
+
+test('parser: calls list is sorted and deduped', () => {
+  const src = `function go() { foo(); bar(); foo(); }\n`;
+  const out = parseFile('a.js', src, 'a.js');
+  assertDeepEqual(out.fns[0].calls, ['bar', 'foo']);
+});
