@@ -1,4 +1,4 @@
-import { STATE, selectPath, setSidebarFilter } from './state.js';
+import { STATE, selectPath, setSidebarFilter, visibleFiles } from './state.js';
 import { cxBucket } from './tabs.js';
 import { el, clear, alpha } from './dom.js';
 
@@ -29,10 +29,7 @@ function filterInput(onChange) {
 
 function fileList(onChange) {
   const list = el('div', { cls: 'sb-list' });
-  const filter = STATE.sidebarFilter.toLowerCase();
-  const visible = STATE.files
-    .filter(f => !filter || f.path.toLowerCase().includes(filter))
-    .sort((a, b) => a.path.localeCompare(b.path));
+  const visible = visibleFiles();
   if (!visible.length) {
     list.appendChild(el('div', { cls: 'sb-empty', text: STATE.files.length ? 'no matches' : 'drop a folder' }));
     return list;

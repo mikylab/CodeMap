@@ -1,4 +1,5 @@
 import { generateWalk } from './walker.js';
+import { newSkipped } from './ingest.js';
 
 const EMPTY_ANALYSIS = { edges: [], degree: new Map(), libToPaths: new Map() };
 
@@ -17,6 +18,7 @@ export const STATE = {
   sidebarFilter: '',
   functionsSort: 'cx',
   traceRoot: null,
+  skipped: newSkipped(),
 };
 
 export function setFiles(files, analysis = EMPTY_ANALYSIS) {
@@ -54,3 +56,21 @@ export function setActiveTab(name) { STATE.activeTab = name; }
 export function setSidebarFilter(s) { STATE.sidebarFilter = s; }
 export function setFunctionsSort(s) { STATE.functionsSort = s; }
 export function setTraceRoot(fn) { STATE.traceRoot = fnToTraceRoot(fn); }
+export function setSkipped(s) { STATE.skipped = s || newSkipped(); }
+
+export function visibleFiles() {
+  const filter = STATE.sidebarFilter.toLowerCase();
+  return STATE.files
+    .filter(f => !filter || f.path.toLowerCase().includes(filter))
+    .sort((a, b) => a.path.localeCompare(b.path));
+}
+
+export function selectFileByOffset(delta) {
+  const visible = visibleFiles();
+  if (!visible.length) return;
+  const i = visible.findIndex(f => f.path === STATE.selectedPath);
+  const next = i < 0
+    ? (delta > 0 ? 0 : visible.length - 1)
+    : Math.max(0, Math.min(visible.length - 1, i + delta));
+  STATE.selectedPath = visible[next].path;
+}
