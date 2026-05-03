@@ -41,15 +41,28 @@ test('graph: computeEdges — shared external import creates an edge', () => {
   assertEqual(edges.length, 1);
   assertEqual(edges[0].a, 'a.js');
   assertEqual(edges[0].b, 'b.js');
+  assertEqual(edges[0].kind, 'import');
+  assertDeepEqual(edges[0].libs, ['react']);
 });
 
-test('graph: computeEdges — same language creates an edge', () => {
+test('graph: computeEdges — same language creates a lang edge', () => {
   const files = [
     file('a.js', { lang: 'JavaScript' }),
     file('b.js', { lang: 'JavaScript' }),
   ];
   const edges = computeEdges(files);
   assertEqual(edges.length, 1);
+  assertEqual(edges[0].kind, 'lang');
+});
+
+test('graph: import edge takes priority over lang-only when both apply', () => {
+  const files = [
+    file('a.js', { lang: 'JavaScript', imports: ['react'] }),
+    file('b.js', { lang: 'JavaScript', imports: ['react'] }),
+  ];
+  const edges = computeEdges(files);
+  assertEqual(edges.length, 1);
+  assertEqual(edges[0].kind, 'import');
 });
 
 test('graph: computeEdges — different langs without shared imports → no edge', () => {
