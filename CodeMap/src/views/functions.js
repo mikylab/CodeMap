@@ -1,5 +1,6 @@
-import { STATE, setFunctionsSort, selectPath, setTraceRoot, setActiveTab } from '../state.js';
+import { STATE, setFunctionsSort, selectPath, setTraceRoot, setActiveTab, toggleFnExpanded } from '../state.js';
 import { cxBucket } from '../tabs.js';
+import { fnKey } from '../trace-graph.js';
 import { el, basename } from '../dom.js';
 
 const SORTS = [
@@ -63,25 +64,72 @@ function rowList(fns, onChange) {
     list.appendChild(el('div', { cls: 'sb-empty', text: 'no functions' }));
     return list;
   }
-  for (const fn of fns) list.appendChild(row(fn, onChange));
+  for (const fn of fns) {
+    const key = fnKey(fn);
+    const expanded = STATE.expandedFns.has(key);
+    list.appendChild(row(fn, key, expanded, onChange));
+    if (expanded) list.appendChild(sourceBlock(fn));
+  }
   return list;
 }
 
-function row(fn, onChange) {
+function row(fn, key, expanded, onChange) {
   const r = el('div', {
-    cls: 'fn-row',
+    cls: 'fn-row' + (expanded ? ' expanded' : ''),
     on: {
       click: () => {
+        toggleFnExpanded(key);
+        selectPath(fn._file.path);
+        onChange();
+      },
+    },
+  });
+  r.appendChild(el('span', { cls: 'sb-twirl', text: expanded ? '▾' : '▸' }));
+  r.appendChild(el('span', { cls: 'fn-name', text: fn.name }));
+  r.appendChild(el('span', { cls: 'fn-file', text: fn._file.name, title: fn._file.path }));
+  r.appendChild(el('span', { cls: 'fn-lines', text: `${fn.lines}L` }));
+  r.appendChild(el('span', { cls: `cx-badge cx-${cxBucket(fn.cx)}`, text: String(fn.cx) }));
+  r.appendChild(el('button', {
+    cls: 'fn-trace-btn', type: 'button', text: 'trace →',
+    title: 'Trace this function in the call graph',
+    on: {
+      click: e => {
+        e.stopPropagation();
         selectPath(fn._file.path);
         setTraceRoot({ name: fn.name, file: fn._file.path, lineNum: fn.lineNum });
         setActiveTab('trace');
         onChange();
       },
     },
-  });
-  r.appendChild(el('span', { cls: 'fn-name', text: fn.name }));
-  r.appendChild(el('span', { cls: 'fn-file', text: fn._file.name }));
-  r.appendChild(el('span', { cls: 'fn-lines', text: `${fn.lines}L` }));
-  r.appendChild(el('span', { cls: `cx-badge cx-${cxBucket(fn.cx)}`, text: String(fn.cx) }));
+  }));
   return r;
+}
+
+function sourceBlock(fn) {
+  const wrap = el('div', { cls: 'fn-source' });
+  const lines = extractFnSource(fn);
+  if (!lines.length) {
+    wrap.appendChild(el('div', { cls: 'fn-source-empty', text: 'source unavailable' }));
+    return wrap;
+  }
+  const pre = el('pre', { cls: 'fn-source-pre' });
+  const startLine = fn.lineNum;
+  for (let i = 0; i < lines.length; i++) {
+    const lineNo = startLine + i;
+    const row = el('div', { cls: 'fn-source-line' });
+    row.appendChild(el('span', { cls: 'fn-source-num', text: String(lineNo) }));
+    row.appendChild(el('span', { cls: 'fn-source-code', text: lines[i] }));
+    pre.appendChild(row);
+  }
+  wrap.appendChild(pre);
+  return wrap;
+}
+
+function extractFnSource(fn) {
+  const file = fn._file;
+  if (!file || !file.src) return [];
+  const all = file.src.split('\n');
+  const start = Math.max(0, fn.lineNum - 1);
+  const end = Math.min(all.length, start + (fn.lines || 1) + 1);
+  return all.slice(start, end);
 }

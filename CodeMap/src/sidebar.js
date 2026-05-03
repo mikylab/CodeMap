@@ -1,4 +1,4 @@
-import { STATE, selectPath, setSidebarFilter, visibleFiles, clearTraceHistory, setActiveTab, getTraceRoot } from './state.js';
+import { STATE, selectPath, setSidebarFilter, visibleFiles, clearTraceHistory, setActiveTab, getTraceRoot, toggleDir } from './state.js';
 import { cxBucket } from './tabs.js';
 import { fnKey } from './trace-graph.js';
 import { el, clear, alpha } from './dom.js';
@@ -37,18 +37,73 @@ function fileList(onChange) {
   }
   const root = getTraceRoot();
   const activeFnKey = root ? fnKey(root) : null;
-  for (const f of visible) {
-    list.appendChild(fileItem(f, onChange));
-    if (STATE.selectedPath === f.path) list.appendChild(fnList(f, activeFnKey, onChange));
-  }
+  const filtering = !!STATE.sidebarFilter;
+  const tree = buildTree(visible);
+  appendNode(list, tree, 0, activeFnKey, filtering, onChange);
   return list;
 }
 
-function fileItem(f, onChange) {
+function buildTree(files) {
+  const root = { name: '', path: '', dirs: new Map(), files: [] };
+  for (const f of files) {
+    const parts = f.path.split('/');
+    let node = root;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const seg = parts[i];
+      let child = node.dirs.get(seg);
+      if (!child) {
+        const dirPath = node.path ? `${node.path}/${seg}` : seg;
+        child = { name: seg, path: dirPath, dirs: new Map(), files: [] };
+        node.dirs.set(seg, child);
+      }
+      node = child;
+    }
+    node.files.push(f);
+  }
+  return root;
+}
+
+function appendNode(list, node, depth, activeFnKey, filtering, onChange) {
+  const dirs = [...node.dirs.values()].sort((a, b) => a.name.localeCompare(b.name));
+  for (const d of dirs) {
+    const expanded = filtering || STATE.expandedDirs.has(d.path);
+    list.appendChild(dirItem(d, depth, expanded, onChange));
+    if (expanded) appendNode(list, d, depth + 1, activeFnKey, filtering, onChange);
+  }
+  const files = node.files.slice().sort((a, b) => a.name.localeCompare(b.name));
+  for (const f of files) {
+    list.appendChild(fileItem(f, depth, onChange));
+    if (STATE.selectedPath === f.path) list.appendChild(fnList(f, depth, activeFnKey, onChange));
+  }
+}
+
+function dirItem(d, depth, expanded, onChange) {
+  const fileCount = countFiles(d);
+  const item = el('div', {
+    cls: 'dir-item',
+    title: d.path,
+    style: { paddingLeft: (10 + depth * 12) + 'px' },
+    on: { click: () => { toggleDir(d.path); onChange(); } },
+  });
+  item.appendChild(el('span', { cls: 'sb-twirl', text: expanded ? '▾' : '▸' }));
+  item.appendChild(el('span', { cls: 'dir-icon', text: expanded ? '📂' : '📁' }));
+  item.appendChild(el('span', { cls: 'dir-name', text: d.name }));
+  item.appendChild(el('span', { cls: 'dir-count', text: String(fileCount) }));
+  return item;
+}
+
+function countFiles(node) {
+  let n = node.files.length;
+  for (const d of node.dirs.values()) n += countFiles(d);
+  return n;
+}
+
+function fileItem(f, depth, onChange) {
   const active = STATE.selectedPath === f.path;
   const item = el('div', {
     cls: 'file-item' + (active ? ' active' : ''),
     title: f.path,
+    style: { paddingLeft: (10 + depth * 12) + 'px' },
     on: { click: () => { selectPath(f.path); onChange(); } },
   });
   item.appendChild(el('span', { cls: 'sb-twirl', text: active ? '▾' : '▸' }));
@@ -58,8 +113,11 @@ function fileItem(f, onChange) {
   return item;
 }
 
-function fnList(f, activeFnKey, onChange) {
-  const wrap = el('div', { cls: 'sb-fn-list' });
+function fnList(f, depth, activeFnKey, onChange) {
+  const wrap = el('div', {
+    cls: 'sb-fn-list',
+    style: { marginLeft: (10 + depth * 12) + 'px' },
+  });
   if (!f.fns.length) {
     wrap.appendChild(el('div', { cls: 'sb-fn-empty', text: 'no functions detected' }));
     return wrap;

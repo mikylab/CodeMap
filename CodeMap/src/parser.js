@@ -35,6 +35,7 @@ export function parseFile(name, src, path) {
     lang: cfg.name, langColor: cfg.color,
     lineCount: newlines.length + 1,
     fns, imports, localImports, cx,
+    src,
   };
 }
 
