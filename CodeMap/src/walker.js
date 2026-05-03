@@ -1,3 +1,5 @@
+import { basename } from './dom.js';
+
 const ENTRY_RE = /\b(main|index|app|run|server|cli|__main__)\b/i;
 const UTIL_RE = /\b(utils?|helpers?|common|shared|libs?|tools?|core)\b/i;
 const CONFIG_RE = /\b(configs?|settings?|schemas?|constants?|env|types?|interfaces?)\b/i;
@@ -124,10 +126,7 @@ function depsStep(files) {
   };
 }
 
-function stem(path) {
-  const last = path.split(/[\\/]/).pop() || '';
-  return last.replace(/\.[^.]+$/, '');
-}
+function stem(path) { return basename(path).replace(/\.[^.]+$/, ''); }
 
 function uniq(arr) { return [...new Set(arr)]; }
 function byPath(a, b) { return a.path.localeCompare(b.path); }

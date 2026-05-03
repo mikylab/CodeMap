@@ -113,10 +113,7 @@ function fnChip(name, onChange) {
   });
 }
 
-function findFn(name) {
-  for (const f of STATE.files) for (const fn of f.fns) if (fn.name === name) return fn;
-  return null;
-}
+function findFn(name) { return STATE.fnByName.get(name) || null; }
 
 function noteStrip(note) {
   return el('div', { cls: 'walk-note', text: note });

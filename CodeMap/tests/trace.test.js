@@ -9,14 +9,16 @@ function makeFile(path, fns) {
   return { name: path.split('/').pop(), path, ext: 'js', lang: 'JavaScript', langColor: '#000', lineCount: 100, fns, imports: [], cx: 1 };
 }
 
+function byPath(files) { return new Map(files.map(f => [f.path, f])); }
+
 test('trace: null root returns null', () => {
-  assertEqual(buildTraceTree(null, []), null);
+  assertEqual(buildTraceTree(null, new Map()), null);
 });
 
 test('trace: root with no co-located fns has empty children', () => {
   const root = fn('solo', 'a.js', 1);
   const files = [makeFile('a.js', [root])];
-  const tree = buildTraceTree(root, files);
+  const tree = buildTraceTree(root, byPath(files));
   assertEqual(tree.fn.name, 'solo');
   assertDeepEqual(tree.children, []);
 });
@@ -26,7 +28,7 @@ test('trace: children are same-file fns ordered by lineNum, root excluded', () =
   const b = fn('b', 'x.js', 1);
   const c = fn('c', 'x.js', 10);
   const files = [makeFile('x.js', [a, b, c])];
-  const tree = buildTraceTree(a, files);
+  const tree = buildTraceTree(a, byPath(files));
   assertDeepEqual(tree.children.map(n => n.fn.name), ['b', 'c']);
 });
 
@@ -34,7 +36,7 @@ test('trace: cycle-safe — children of children do not re-include visited fns',
   const a = fn('a', 'x.js', 1);
   const b = fn('b', 'x.js', 2);
   const files = [makeFile('x.js', [a, b])];
-  const tree = buildTraceTree(a, files);
+  const tree = buildTraceTree(a, byPath(files));
   assertEqual(tree.children.length, 1);
   assertEqual(tree.children[0].fn.name, 'b');
   assertDeepEqual(tree.children[0].children, []);
@@ -45,14 +47,14 @@ test('trace: deterministic — repeated calls produce identical trees', () => {
   const b = fn('b', 'x.js', 2);
   const c = fn('c', 'x.js', 3);
   const files = [makeFile('x.js', [c, a, b])];
-  const t1 = buildTraceTree(a, files);
-  const t2 = buildTraceTree(a, files);
+  const t1 = buildTraceTree(a, byPath(files));
+  const t2 = buildTraceTree(a, byPath(files));
   assertDeepEqual(JSON.parse(JSON.stringify(t1)), JSON.parse(JSON.stringify(t2)));
 });
 
 test('trace: missing file (root not in files) yields empty children', () => {
   const root = fn('orphan', 'gone.js', 1);
-  const tree = buildTraceTree(root, []);
+  const tree = buildTraceTree(root, new Map());
   assertDeepEqual(tree.children, []);
 });
 

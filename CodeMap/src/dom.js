@@ -19,3 +19,7 @@ export function clear(node) { node.replaceChildren(); }
 export function alpha(hex, hexAlpha) {
   return hex.length === 7 ? hex + hexAlpha : hex;
 }
+
+export function basename(path) {
+  return path.split(/[\\/]/).pop() || '';
+}

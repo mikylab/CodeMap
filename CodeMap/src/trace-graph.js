@@ -1,10 +1,6 @@
-// Pure function: build a deterministic, cycle-safe trace tree rooted at a function.
-//
-// Heuristic (per CLAUDE.md): no AST. We use same-file co-location — a function's
-// "callees" are approximated as the other functions defined in the same file,
-// ordered by line number. Cycle-safe via a visited set keyed by fn identity.
-// Depth is naturally bounded because once every fn in the file is visited, no
-// further expansion is possible.
+// Per CLAUDE.md: no AST. We approximate a function's callees as the other
+// functions defined in the same file, ordered by line number — a deliberate
+// heuristic, not a true call graph.
 
 const MAX_DEPTH = 4;
 
@@ -12,9 +8,8 @@ export function fnKey(fn) {
   return `${fn.file}::${fn.name}@${fn.lineNum}`;
 }
 
-export function buildTraceTree(rootFn, files) {
+export function buildTraceTree(rootFn, byPath) {
   if (!rootFn) return null;
-  const byPath = new Map(files.map(f => [f.path, f]));
   const visited = new Set([fnKey(rootFn)]);
   return expand(rootFn, byPath, visited, 0);
 }

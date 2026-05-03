@@ -1,15 +1,14 @@
 import { STATE, setTraceRoot, selectPath } from '../state.js';
 import { cxBucket } from '../tabs.js';
 import { buildTraceTree, fnKey } from '../trace-graph.js';
-import { el } from '../dom.js';
+import { el, basename } from '../dom.js';
 
 let selectedKey = null;
 let lastRootKey = null;
 
 export function renderTrace(onChange) {
-  if (!STATE.files.length) return splash();
-  const allFns = collectFns();
-  if (!allFns.length) return splash();
+  const allFns = STATE.allFns;
+  if (!STATE.files.length || !allFns.length) return splash();
 
   const root = resolveRoot(allFns);
   if (root && fnKey(root) !== lastRootKey) {
@@ -29,12 +28,6 @@ function splash() {
     el('div', { cls: 'splash-title', text: 'No trace yet' }),
     el('div', { cls: 'splash-sub', text: 'Drop a folder, then pick a function to trace.' }),
   ]);
-}
-
-function collectFns() {
-  const out = [];
-  for (const f of STATE.files) for (const fn of f.fns) out.push(fn);
-  return out;
 }
 
 function resolveRoot(allFns) {
@@ -60,8 +53,7 @@ function header(allFns, root, onChange) {
   });
   for (let i = 0; i < allFns.length; i++) {
     const fn = allFns[i];
-    const fname = fn.file.split(/[\\/]/).pop();
-    const opt = el('option', { value: String(i), text: `${fn.name} (${fname})` });
+    const opt = el('option', { value: String(i), text: `${fn.name} (${basename(fn.file)})` });
     if (root && fnKey(fn) === fnKey(root)) opt.selected = true;
     sel.appendChild(opt);
   }
@@ -75,7 +67,7 @@ function body(root, onChange) {
     wrap.appendChild(el('div', { cls: 'sb-empty', text: 'no functions' }));
     return wrap;
   }
-  const tree = buildTraceTree(root, STATE.files);
+  const tree = buildTraceTree(root, STATE.byPath);
   const selected = findNode(tree, selectedKey) || tree;
   wrap.appendChild(treePane(tree, selected, onChange));
   wrap.appendChild(detailPane(selected.fn, onChange));
@@ -116,8 +108,7 @@ function treeNode(node, depth, selected, onChange) {
   wrap.appendChild(conn);
   const text = el('div', { cls: 'trace-node-text' });
   text.appendChild(el('div', { cls: 'trace-node-name', text: fn.name }));
-  const fname = fn.file.split(/[\\/]/).pop();
-  text.appendChild(el('div', { cls: 'trace-node-sub', text: `${fname} · L${fn.lineNum} · cx:${fn.cx}` }));
+  text.appendChild(el('div', { cls: 'trace-node-sub', text: `${basename(fn.file)} · L${fn.lineNum} · cx:${fn.cx}` }));
   wrap.appendChild(text);
   return wrap;
 }
@@ -126,8 +117,7 @@ function detailPane(fn, onChange) {
   const pane = el('div', { cls: 'trace-detail' });
   pane.appendChild(el('div', { cls: 'trace-fn-name', text: `${fn.name}()` }));
   const meta = el('div', { cls: 'trace-fn-meta' });
-  const fname = fn.file.split(/[\\/]/).pop();
-  meta.appendChild(document.createTextNode(`${fname} · line ${fn.lineNum} · ${fn.lines} lines · complexity `));
+  meta.appendChild(document.createTextNode(`${basename(fn.file)} · line ${fn.lineNum} · ${fn.lines} lines · complexity `));
   meta.appendChild(el('span', { cls: `cx-${cxBucket(fn.cx)}-fg`, text: String(fn.cx) }));
   pane.appendChild(meta);
 
