@@ -1,14 +1,15 @@
 import { fnKey } from '../trace-graph.js';
 import { cxBucket } from '../tabs.js';
+import { STATE } from '../state.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-const COL_W = 200;
-const ROW_H = 56;
-const NODE_W = 168;
-const NODE_H = 38;
+const COL_W = 240;
+const ROW_H = 64;
+const NODE_W = 200;
+const NODE_H = 48;
 const PAD = 24;
 
-export function renderTraceGraph(tree, selected, onSelect, onSetRoot) {
+export function renderTraceMap(tree, selected, onSelect, onSetRoot) {
   const host = document.createElement('div');
   host.className = 'trace-graph-host';
   if (!tree) return host;
@@ -67,41 +68,60 @@ export function renderTraceGraph(tree, selected, onSelect, onSetRoot) {
   for (const n of items) {
     const g = document.createElementNS(SVG_NS, 'g');
     g.setAttribute('transform', `translate(${n.x},${n.y})`);
-    const classes = ['trace-svg-node'];
-    if (n.unresolved) classes.push('unresolved');
-    if (n.ambiguous) classes.push('ambiguous');
-    if (n.fn.cx >= 7 && !n.unresolved) classes.push('warn');
-    if (!n.unresolved && fnKey(n.fn) === selKey) classes.push('active');
-    if (!n.unresolved) classes.push(`cx-${cxBucket(n.fn.cx)}`);
-    g.setAttribute('class', classes.join(' '));
+    const cls = ['trace-svg-node', `cx-${cxBucket(n.fn.cx)}`];
+    if (n.fn.cx >= 7) cls.push('warn');
+    if (n.cycle) cls.push('cycle');
+    if (fnKey(n.fn) === selKey) cls.push('active');
+    g.setAttribute('class', cls.join(' '));
+    g.style.cursor = 'pointer';
 
     const rect = document.createElementNS(SVG_NS, 'rect');
     rect.setAttribute('width', String(NODE_W));
     rect.setAttribute('height', String(NODE_H));
-    rect.setAttribute('rx', '4');
+    rect.setAttribute('rx', '6');
     g.appendChild(rect);
 
+    // file label (top)
+    const fileLbl = document.createElementNS(SVG_NS, 'text');
+    fileLbl.setAttribute('class', 'trace-svg-file');
+    fileLbl.setAttribute('x', '10');
+    fileLbl.setAttribute('y', '14');
+    fileLbl.textContent = truncate(baseName(n.fn.file), 28);
+    g.appendChild(fileLbl);
+
+    // function name (middle)
     const name = document.createElementNS(SVG_NS, 'text');
     name.setAttribute('class', 'trace-svg-name');
     name.setAttribute('x', '10');
-    name.setAttribute('y', '16');
-    name.textContent = truncate(n.fn.name, 22);
+    name.setAttribute('y', '30');
+    name.textContent = truncate(n.fn.name + '()', 26);
     g.appendChild(name);
 
-    const sub = document.createElementNS(SVG_NS, 'text');
-    sub.setAttribute('class', 'trace-svg-sub');
-    sub.setAttribute('x', '10');
-    sub.setAttribute('y', '30');
-    sub.textContent = n.unresolved
-      ? '(unresolved)'
-      : `${baseName(n.fn.file)} · cx:${n.fn.cx}`;
-    g.appendChild(sub);
+    // bottom row: cx + fan-in/out + ext count
+    const meta = document.createElementNS(SVG_NS, 'text');
+    meta.setAttribute('class', 'trace-svg-meta');
+    meta.setAttribute('x', '10');
+    meta.setAttribute('y', '42');
+    const fnK = fnKey(n.fn);
+    const fanIn = STATE.fanIn.get(fnK) || 0;
+    const fanOut = STATE.fanOut.get(fnK) || 0;
+    const parts = [`cx:${n.fn.cx}`, `←${fanIn}`, `→${fanOut}`];
+    if (n.extCount) parts.push(`+${n.extCount} ext`);
+    if (n.cycle) parts.push('cycle');
+    meta.textContent = parts.join(' · ');
+    g.appendChild(meta);
 
-    if (!n.unresolved) {
-      g.addEventListener('click', () => onSelect(fnKey(n.fn)));
-      g.addEventListener('dblclick', () => onSetRoot(n.fn));
-      g.style.cursor = 'pointer';
-    }
+    // tooltip
+    const title = document.createElementNS(SVG_NS, 'title');
+    title.textContent =
+      `${n.fn.name}()  —  ${n.fn.file}:${n.fn.lineNum}\n` +
+      `complexity ${n.fn.cx} · callers ${fanIn} · calls ${fanOut}` +
+      (n.extCount ? `\nexternal calls (${n.extCount}): ${n.extNames.join(', ')}${n.extCount > n.extNames.length ? ', …' : ''}` : '') +
+      `\nclick: select · double-click: re-root map`;
+    g.appendChild(title);
+
+    g.addEventListener('click', () => onSelect(fnKey(n.fn)));
+    g.addEventListener('dblclick', () => onSetRoot(n.fn));
     ng.appendChild(g);
   }
   svg.appendChild(ng);
@@ -109,14 +129,14 @@ export function renderTraceGraph(tree, selected, onSelect, onSetRoot) {
   return host;
 }
 
-// BFS layout. items[i] corresponds to BFS-visit order; edges reference indices.
+// BFS layout: items[i] is the i-th visited node; edges reference indices.
 function layout(tree) {
   const items = [];
   const edges = [];
   const queue = [{ node: tree, col: 0, parentIdx: -1 }];
   const rowsAtCol = new Map();
   while (queue.length) {
-    const { node, col, parentIdx, parentNode } = queue.shift();
+    const { node, col, parentIdx } = queue.shift();
     const row = rowsAtCol.get(col) || 0;
     rowsAtCol.set(col, row + 1);
     const idx = items.length;
@@ -125,8 +145,9 @@ function layout(tree) {
       col, row,
       x: PAD + col * COL_W,
       y: PAD + row * ROW_H,
-      unresolved: !!node.unresolved,
-      ambiguous: !!node.ambiguous,
+      extCount: node.extCount || 0,
+      extNames: node.extNames || [],
+      cycle: !!node.cycle,
     });
     if (parentIdx >= 0) {
       edges.push({
@@ -137,7 +158,7 @@ function layout(tree) {
       });
     }
     for (const child of node.children) {
-      queue.push({ node: child, col: col + 1, parentIdx: idx, parentNode: node });
+      queue.push({ node: child, col: col + 1, parentIdx: idx });
     }
   }
   return { items, edges };

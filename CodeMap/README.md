@@ -30,12 +30,17 @@ picker. Files are read locally; nothing leaves your machine.
   Use ←/→ or click progress dots to navigate. Function chips jump to Trace.
 - **Functions** — sortable flat list (by name, lines, or complexity). Clicking a
   row roots the Trace tab at that function.
-- **Trace** — pick a root function and see its execution path: regex-inferred
-  callees, expanded across files via import disambiguation. Toggle between
-  **Tree** (indented call hierarchy) and **Graph** (SVG DAG with arrows). Each
-  edge is colored by confidence — `same-file` (green), `imported` (purple),
-  `guess` (gray dashed); ambiguous and unresolved calls are flagged. The detail
-  pane shows complexity, fan-in / fan-out, callers, and resolved callees.
+- **Trace** — file-driven execution map. Pick a file (sidebar or dropdown);
+  Codemap auto-detects its entry points (called from another file, or
+  `main`/`init`/`render…`/`handle…`/exported), picks the one that reaches the
+  most code, and renders a DAG of every function it transitively calls. Each
+  node shows file, function, complexity, fan-in/out, and a `+N ext` count for
+  external/library calls (which are collapsed, not drawn). Edges are colored
+  by inference confidence: green = same-file, purple = via local import,
+  gray-dashed = single-name guess. Right panel summarizes the map's
+  *reach* (functions touched), *files*, *depth* (longest chain), and
+  *hotspots* (cx ≥ 7), with click-to-jump pills for the worst offenders.
+  Click a node to inspect; double-click to re-root.
 - **Libraries** — every external/stdlib import aggregated, sorted by usage,
   with `stdlib` vs `external` labels.
 

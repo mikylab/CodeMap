@@ -354,20 +354,39 @@ button, input, select { font: inherit; color: inherit; }
 
 /* ─── trace ────────────────────────────────────────────────────────────── */
 .trace-root { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.trace-header {
-  display: flex; align-items: center; gap: 8px;
+
+.trace-controls {
+  display: flex; flex-direction: column; gap: 6px;
   padding: 8px 12px; border-bottom: 0.5px solid var(--border);
   background: var(--bg2);
 }
-.trace-hd-label { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.trace-control-block { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.trace-ctrl-label {
+  font-family: var(--font-mono); font-size: 9px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.07em;
+  width: 60px; flex-shrink: 0;
+}
 .trace-select {
-  flex: 1; max-width: 240px;
+  flex: 1; min-width: 0; max-width: 480px;
   font-family: var(--font-mono); font-size: 11px;
   padding: 3px 7px; border-radius: 4px;
   border: 0.5px solid var(--border2); background: var(--bg); color: var(--text);
 }
+.trace-entry-chips { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; min-width: 0; }
+.trace-entry-chip {
+  font-family: var(--font-mono); font-size: 11px;
+  padding: 3px 9px; border-radius: 12px;
+  border: 0.5px solid var(--border2); background: var(--bg); color: var(--text);
+  cursor: pointer; transition: all 0.15s;
+}
+.trace-entry-chip:hover { border-color: var(--accent); }
+.trace-entry-chip.active {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+}
+.trace-entry-more { font-family: var(--font-mono); font-size: 10px; color: var(--muted); align-self: center; }
+
 .trace-body {
-  display: grid; grid-template-columns: 240px 1fr;
+  display: grid; grid-template-columns: 1fr 300px;
   flex: 1; overflow: hidden; min-height: 0;
 }
 .trace-tree {
@@ -489,8 +508,8 @@ button, input, select { font: inherit; color: inherit; }
 .pill.unresolved { border-style: dashed; color: var(--muted); }
 .pill.amb { border-style: dashed; }
 
-/* ─── trace: graph view ────────────────────────────────────────────────── */
-.trace-body.graph-mode { grid-template-columns: 1fr 280px; }
+/* ─── trace: map (SVG DAG) ─────────────────────────────────────────────── */
+.trace-body.map-mode { grid-template-columns: 1fr 320px; }
 .trace-graph-host {
   overflow: auto;
   background: var(--bg);
@@ -504,23 +523,29 @@ button, input, select { font: inherit; color: inherit; }
   transition: stroke 0.1s, fill 0.1s;
 }
 .trace-svg-node:hover rect { stroke: var(--accent); }
-.trace-svg-node.active rect { stroke: var(--accent); stroke-width: 1.5; fill: var(--bg3); }
-.trace-svg-node.warn rect { stroke: var(--danger); }
-.trace-svg-node.unresolved rect {
-  fill: transparent; stroke-dasharray: 3 3; stroke: var(--muted);
+.trace-svg-node.active rect { stroke: var(--accent); stroke-width: 2; fill: var(--bg3); }
+.trace-svg-node.cx-low  rect { fill: #E1F5EE; }
+.trace-svg-node.cx-mid  rect { fill: #FAEEDA; }
+.trace-svg-node.cx-high rect { fill: #FCEBEB; }
+@media (prefers-color-scheme: dark) {
+  .trace-svg-node.cx-low  rect { fill: #0d3b32; }
+  .trace-svg-node.cx-mid  rect { fill: #4a2c08; }
+  .trace-svg-node.cx-high rect { fill: #401111; }
 }
-.trace-svg-node.ambiguous rect { stroke: var(--warn); stroke-dasharray: 4 2; }
+.trace-svg-node.warn rect { stroke: var(--danger); stroke-width: 1; }
+.trace-svg-node.cycle rect { stroke-dasharray: 4 2; }
+.trace-svg-file {
+  font-family: var(--font-mono); font-size: 9px; fill: var(--muted);
+  text-transform: lowercase;
+}
 .trace-svg-name {
-  font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 500;
   fill: var(--text);
 }
-.trace-svg-node.unresolved .trace-svg-name { fill: var(--muted); }
-.trace-svg-sub {
+.trace-svg-meta {
   font-family: var(--font-mono); font-size: 9px; fill: var(--muted);
 }
-.trace-svg-edge {
-  fill: none; stroke-width: 1.2;
-}
+.trace-svg-edge { fill: none; stroke-width: 1.2; }
 .trace-svg-edge.conf-high { stroke: var(--success); }
 .trace-svg-edge.conf-med  { stroke: var(--purple); }
 .trace-svg-edge.conf-low  { stroke: var(--muted); stroke-dasharray: 4 3; opacity: 0.7; }
@@ -529,6 +554,28 @@ button, input, select { font: inherit; color: inherit; }
 .trace-svg-arrow.conf-med  { fill: var(--purple); }
 .trace-svg-arrow.conf-low  { fill: var(--muted); }
 .trace-svg-arrow.conf-amb  { fill: var(--warn); }
+
+/* ─── trace: detail panel summary ─────────────────────────────────────── */
+.trace-summary-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 6px; margin-bottom: 12px;
+}
+.trace-summary-cell {
+  background: var(--bg); border: 0.5px solid var(--border2);
+  border-radius: 6px; padding: 8px 10px;
+}
+.trace-summary-cell.warn { border-color: var(--danger); }
+.trace-summary-val {
+  font-family: var(--font-mono); font-size: 18px; font-weight: 500; color: var(--text);
+  line-height: 1;
+}
+.trace-summary-cell.warn .trace-summary-val { color: var(--danger); }
+.trace-summary-lbl {
+  font-family: var(--font-mono); font-size: 9px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.07em; margin-top: 4px;
+}
+.trace-section-label.small { margin-top: 10px; }
+.trace-node-detail { margin-top: 8px; padding-top: 12px; border-top: 0.5px solid var(--border); }
 
 /* ─── graph ────────────────────────────────────────────────────────────── */
 .graph-root { display: flex; flex-direction: column; height: 100%; min-height: 0; }

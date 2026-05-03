@@ -1,6 +1,6 @@
 import { generateWalk } from './walker.js';
 import { newSkipped } from './ingest.js';
-import { fnKey } from './trace-graph.js';
+import { fnKey, pickEntryForFile } from './trace-graph.js';
 
 const EMPTY_ANALYSIS = {
   edges: [], degree: new Map(), libToPaths: new Map(),
@@ -50,7 +50,13 @@ export function setFiles(files, analysis = EMPTY_ANALYSIS) {
   STATE.fanOut = analysis.fanOut || new Map();
   STATE.walk = generateWalk(STATE);
   STATE.walkIdx = 0;
-  STATE.traceRoot = fnToTraceRoot(STATE.allFns[0]);
+  // Default trace: pick the most-reaching entry of the first file.
+  const firstFile = files[0] || null;
+  STATE.selectedPath = firstFile ? firstFile.path : null;
+  const entry = firstFile
+    ? pickEntryForFile(firstFile, STATE.callsByFn, STATE.callersByFn, STATE.fnByKey)
+    : null;
+  STATE.traceRoot = fnToTraceRoot(entry);
 }
 
 function indexByName(fns) {
@@ -63,7 +69,14 @@ function fnToTraceRoot(fn) {
   return fn ? { name: fn.name, file: fn.file, lineNum: fn.lineNum } : null;
 }
 
-export function selectPath(p) { STATE.selectedPath = p; }
+export function selectPath(p) {
+  STATE.selectedPath = p;
+  const file = STATE.byPath.get(p);
+  if (file) {
+    const entry = pickEntryForFile(file, STATE.callsByFn, STATE.callersByFn, STATE.fnByKey);
+    STATE.traceRoot = fnToTraceRoot(entry);
+  }
+}
 
 export function setWalkIdx(i) {
   if (!STATE.walk.length) { STATE.walkIdx = 0; return; }
