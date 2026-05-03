@@ -199,8 +199,21 @@ button, input, select { font: inherit; color: inherit; }
   min-width: 36px; text-align: right;
 }
 
+/* ─── view hint (small explainer above each view) ──────────────────────── */
+.view-hint {
+  font-family: var(--font-sans); font-size: 11px; color: var(--muted);
+  padding: 6px 14px; background: var(--bg);
+  border-bottom: 0.5px solid var(--border);
+}
+
 /* ─── walk ─────────────────────────────────────────────────────────────── */
 .walk-root { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.walk-cat-tag {
+  display: inline-block; font-family: var(--font-mono); font-size: 9px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  padding: 1px 5px; border-radius: 3px; border: 0.5px solid;
+  margin-right: 8px; vertical-align: middle;
+}
 .walk-bar {
   display: flex; align-items: center; gap: 12px;
   padding: 8px 14px; background: var(--bg2);

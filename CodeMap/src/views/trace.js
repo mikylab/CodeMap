@@ -17,6 +17,10 @@ export function renderTrace(onChange) {
   }
 
   const wrap = el('div', { cls: 'trace-root' });
+  wrap.appendChild(el('div', {
+    cls: 'view-hint',
+    text: 'Pick a root function — the tree shows other functions in the same file as a proxy call graph (heuristic, no AST). Click a node to inspect.',
+  }));
   wrap.appendChild(header(allFns, root, onChange));
   wrap.appendChild(body(root, onChange));
   return wrap;
