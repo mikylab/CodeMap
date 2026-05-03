@@ -1,10 +1,27 @@
-import { STATE, setTraceRoot, selectPath, gotoTraceHistory, clearTraceHistory } from '../state.js';
+import { STATE, setTraceRoot, selectPath, gotoTraceHistory, clearTraceHistory, getTraceRoot } from '../state.js';
 import { cxBucket } from '../tabs.js';
 import { buildTraceTree, fnKey } from '../trace-graph.js';
 import { el, basename } from '../dom.js';
 import { renderTraceMap } from './trace-graph-view.js';
 
 let selectedKey = null;
+let cachedRootKey = null;
+let cachedTree = null;
+let cachedFilesRef = null;
+
+function jumpTo(fn, onChange) {
+  if (!fn) return;
+  setTraceRoot(fn);
+  selectPath(fn.file);
+  selectedKey = fnKey(fn);
+  onChange();
+}
+
+function selectNode(key, onChange) {
+  if (selectedKey === key) return;
+  selectedKey = key;
+  onChange();
+}
 
 export function renderTrace(onChange) {
   if (!STATE.files.length) return splash();
@@ -14,7 +31,13 @@ export function renderTrace(onChange) {
 
   if (selectedKey == null || !STATE.fnByKey.get(selectedKey)) selectedKey = fnKey(root);
 
-  const tree = buildTraceTree(root, STATE.callsByFn, STATE.fnByKey);
+  const rootKey = fnKey(root);
+  if (cachedRootKey !== rootKey || cachedFilesRef !== STATE.files) {
+    cachedTree = buildTraceTree(root, STATE.callsByFn, STATE.fnByKey);
+    cachedRootKey = rootKey;
+    cachedFilesRef = STATE.files;
+  }
+  const tree = cachedTree;
 
   const wrap = el('div', { cls: 'trace-root' });
   wrap.appendChild(breadcrumbs(onChange));
@@ -22,6 +45,7 @@ export function renderTrace(onChange) {
   wrap.appendChild(body(tree, onChange));
   return wrap;
 }
+
 
 function splash() {
   return el('div', { cls: 'upload-splash' }, [
@@ -38,9 +62,8 @@ function pickPrompt() {
 }
 
 function currentRoot() {
-  const r = STATE.traceRoot;
-  if (!r) return null;
-  return STATE.fnByKey.get(`${r.file}::${r.name}@${r.lineNum}`) || null;
+  const r = getTraceRoot();
+  return r ? STATE.fnByKey.get(fnKey(r)) || null : null;
 }
 
 function breadcrumbs(onChange) {
@@ -85,7 +108,7 @@ function breadcrumbs(onChange) {
       title: 'Clear trail and start fresh from this function',
       on: {
         click: () => {
-          clearTraceHistory(STATE.fnByKey.get(`${history[idx].file}::${history[idx].name}@${history[idx].lineNum}`));
+          clearTraceHistory(STATE.fnByKey.get(fnKey(history[idx])));
           onChange();
         },
       },
@@ -106,15 +129,11 @@ function hint(root, tree) {
 function body(tree, onChange) {
   const wrap = el('div', { cls: 'trace-body map-mode' });
   const selectedNode = findNode(tree, selectedKey) || tree;
-  wrap.appendChild(renderTraceMap(tree, selectedNode, key => {
-    selectedKey = key;
-    onChange();
-  }, fn => {
-    setTraceRoot(fn);
-    selectPath(fn.file);
-    selectedKey = fnKey(fn);
-    onChange();
-  }));
+  wrap.appendChild(renderTraceMap(
+    tree, selectedNode,
+    key => selectNode(key, onChange),
+    fn => jumpTo(fn, onChange),
+  ));
   wrap.appendChild(detailPane(tree, selectedNode, onChange));
   return wrap;
 }
@@ -145,14 +164,7 @@ function detailPane(tree, selected, onChange) {
         type: 'button',
         text: `${fn.name} (cx:${fn.cx})`,
         title: `${basename(fn.file)} · L${fn.lineNum}`,
-        on: {
-          click: () => {
-            setTraceRoot(fn);
-            selectPath(fn.file);
-            selectedKey = fnKey(fn);
-            onChange();
-          },
-        },
+        on: { click: () => jumpTo(fn, onChange) },
       }));
     }
     pane.appendChild(list);
@@ -219,14 +231,7 @@ function nodeDetail(selected, onChange) {
         type: 'button',
         text: `← ${callerFn.name}`,
         title: `${callerFn.file} · L${callerFn.lineNum}`,
-        on: {
-          click: () => {
-            setTraceRoot(callerFn);
-            selectPath(callerFn.file);
-            selectedKey = fnKey(callerFn);
-            onChange();
-          },
-        },
+        on: { click: () => jumpTo(callerFn, onChange) },
       }));
     }
     if (callers.length > 8) row.appendChild(el('span', { cls: 'trace-entry-more', text: `+${callers.length - 8} more` }));

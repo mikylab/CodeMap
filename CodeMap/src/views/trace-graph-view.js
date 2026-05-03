@@ -1,6 +1,7 @@
 import { fnKey } from '../trace-graph.js';
 import { cxBucket } from '../tabs.js';
 import { STATE } from '../state.js';
+import { basename } from '../dom.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const COL_W = 240;
@@ -66,12 +67,16 @@ export function renderTraceMap(tree, selected, onSelect, onSetRoot) {
   const ng = document.createElementNS(SVG_NS, 'g');
   const selKey = selected ? fnKey(selected.fn) : null;
   for (const n of items) {
+    const fnK = fnKey(n.fn);
+    const fanIn = STATE.fanIn.get(fnK) || 0;
+    const fanOut = STATE.fanOut.get(fnK) || 0;
+
     const g = document.createElementNS(SVG_NS, 'g');
     g.setAttribute('transform', `translate(${n.x},${n.y})`);
     const cls = ['trace-svg-node', `cx-${cxBucket(n.fn.cx)}`];
     if (n.fn.cx >= 7) cls.push('warn');
     if (n.cycle) cls.push('cycle');
-    if (fnKey(n.fn) === selKey) cls.push('active');
+    if (fnK === selKey) cls.push('active');
     g.setAttribute('class', cls.join(' '));
     g.style.cursor = 'pointer';
 
@@ -81,15 +86,13 @@ export function renderTraceMap(tree, selected, onSelect, onSetRoot) {
     rect.setAttribute('rx', '6');
     g.appendChild(rect);
 
-    // file label (top)
     const fileLbl = document.createElementNS(SVG_NS, 'text');
     fileLbl.setAttribute('class', 'trace-svg-file');
     fileLbl.setAttribute('x', '10');
     fileLbl.setAttribute('y', '14');
-    fileLbl.textContent = truncate(baseName(n.fn.file), 28);
+    fileLbl.textContent = truncate(basename(n.fn.file), 28);
     g.appendChild(fileLbl);
 
-    // function name (middle)
     const name = document.createElementNS(SVG_NS, 'text');
     name.setAttribute('class', 'trace-svg-name');
     name.setAttribute('x', '10');
@@ -97,21 +100,16 @@ export function renderTraceMap(tree, selected, onSelect, onSetRoot) {
     name.textContent = truncate(n.fn.name + '()', 26);
     g.appendChild(name);
 
-    // bottom row: cx + fan-in/out + ext count
     const meta = document.createElementNS(SVG_NS, 'text');
     meta.setAttribute('class', 'trace-svg-meta');
     meta.setAttribute('x', '10');
     meta.setAttribute('y', '42');
-    const fnK = fnKey(n.fn);
-    const fanIn = STATE.fanIn.get(fnK) || 0;
-    const fanOut = STATE.fanOut.get(fnK) || 0;
     const parts = [`cx:${n.fn.cx}`, `←${fanIn}`, `→${fanOut}`];
     if (n.extCount) parts.push(`+${n.extCount} ext`);
     if (n.cycle) parts.push('cycle');
     meta.textContent = parts.join(' · ');
     g.appendChild(meta);
 
-    // tooltip
     const title = document.createElementNS(SVG_NS, 'title');
     title.textContent =
       `${n.fn.name}()  —  ${n.fn.file}:${n.fn.lineNum}\n` +
@@ -120,7 +118,7 @@ export function renderTraceMap(tree, selected, onSelect, onSetRoot) {
       `\nclick: select · double-click: re-root map`;
     g.appendChild(title);
 
-    g.addEventListener('click', () => onSelect(fnKey(n.fn)));
+    g.addEventListener('click', () => onSelect(fnK));
     g.addEventListener('dblclick', () => onSetRoot(n.fn));
     ng.appendChild(g);
   }
@@ -165,4 +163,3 @@ function layout(tree) {
 }
 
 function truncate(s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
-function baseName(p) { return p.split(/[\\/]/).pop() || ''; }

@@ -75,32 +75,27 @@ function buildCallGraph(files) {
       for (const callName of (fn.calls || [])) {
         const all = fnsByName.get(callName) || [];
         const sameFile = all.filter(c => c.file === f.path);
-        const imported = all.filter(c => importTargets.has(c.file));
-        let target = null, confidence = 'low', candidates = [];
-        if (sameFile.length >= 1) {
-          target = sameFile.slice().sort((a, b) => a.lineNum - b.lineNum)[0];
-          confidence = 'high';
-          if (sameFile.length > 1) candidates = sameFile.map(fnKey);
-        } else if (imported.length >= 1) {
-          target = imported.slice().sort((a, b) => a.lineNum - b.lineNum)[0];
-          confidence = 'med';
-          if (imported.length > 1) candidates = imported.map(fnKey);
-        } else if (all.length >= 1) {
-          target = all.slice().sort((a, b) => a.file.localeCompare(b.file) || a.lineNum - b.lineNum)[0];
-          confidence = 'low';
-          if (all.length > 1) candidates = all.map(fnKey);
+        const imported = sameFile.length ? null : all.filter(c => importTargets.has(c.file));
+        let pool = null, confidence = 'low';
+        if (sameFile.length) { pool = sameFile; confidence = 'high'; }
+        else if (imported && imported.length) { pool = imported; confidence = 'med'; }
+        else if (all.length) { pool = all; confidence = 'low'; }
+        let target = null, candidates = [];
+        if (pool) {
+          target = pool.length === 1
+            ? pool[0]
+            : pool.slice().sort((a, b) => a.file.localeCompare(b.file) || a.lineNum - b.lineNum)[0];
+          if (pool.length > 1) candidates = pool.map(fnKey);
         }
         const ambiguous = candidates.length > 1;
-        const resolved = !!target;
-        const edge = {
+        edges.push({
           name: callName,
           target: target ? fnKey(target) : null,
           confidence,
           ambiguous,
-          resolved,
+          resolved: !!target,
           candidates,
-        };
-        edges.push(edge);
+        });
         if (target) {
           const toKey = fnKey(target);
           callEdges.push({ from: fromKey, to: toKey, confidence });
@@ -108,7 +103,7 @@ function buildCallGraph(files) {
           fanIn.set(toKey, (fanIn.get(toKey) || 0) + 1);
           let arr = callersByFn.get(toKey);
           if (!arr) callersByFn.set(toKey, arr = []);
-          arr.push({ from: fromKey, confidence, ambiguous });
+          arr.push({ from: fromKey, fromFile: f.path, confidence, ambiguous });
         }
       }
       callsByFn.set(fromKey, edges);

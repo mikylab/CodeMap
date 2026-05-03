@@ -1,4 +1,4 @@
-import { STATE, selectPath, setSidebarFilter, visibleFiles, clearTraceHistory, setActiveTab } from './state.js';
+import { STATE, selectPath, setSidebarFilter, visibleFiles, clearTraceHistory, setActiveTab, getTraceRoot } from './state.js';
 import { cxBucket } from './tabs.js';
 import { fnKey } from './trace-graph.js';
 import { el, clear, alpha } from './dom.js';
@@ -35,7 +35,8 @@ function fileList(onChange) {
     list.appendChild(el('div', { cls: 'sb-empty', text: STATE.files.length ? 'no matches' : 'drop a folder' }));
     return list;
   }
-  const activeFnKey = STATE.traceRoot ? `${STATE.traceRoot.file}::${STATE.traceRoot.name}@${STATE.traceRoot.lineNum}` : null;
+  const root = getTraceRoot();
+  const activeFnKey = root ? fnKey(root) : null;
   for (const f of visible) {
     list.appendChild(fileItem(f, onChange));
     if (STATE.selectedPath === f.path) list.appendChild(fnList(f, activeFnKey, onChange));
