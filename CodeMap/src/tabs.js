@@ -3,7 +3,7 @@ export const TABS = [
   { id: 'walk',      label: 'Walk',      enabled: true },
   { id: 'functions', label: 'Functions', enabled: true },
   { id: 'trace',     label: 'Trace',     enabled: true },
-  { id: 'graph',     label: 'Graph',     enabled: false },
+  { id: 'graph',     label: 'Graph',     enabled: true },
   { id: 'libraries', label: 'Libraries', enabled: true },
 ];
 
