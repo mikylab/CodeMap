@@ -14,6 +14,7 @@ export const STATE = {
   activeTab: 'overview',
   sidebarFilter: '',
   functionsSort: 'cx',
+  traceRoot: null,
 };
 
 export function setFiles(files, analysis = EMPTY_ANALYSIS) {
@@ -25,6 +26,12 @@ export function setFiles(files, analysis = EMPTY_ANALYSIS) {
   STATE.libToPaths = analysis.libToPaths;
   STATE.walk = generateWalk(STATE);
   STATE.walkIdx = 0;
+  STATE.traceRoot = defaultTraceRoot(files);
+}
+
+function defaultTraceRoot(files) {
+  for (const f of files) if (f.fns.length) return { name: f.fns[0].name, file: f.path, lineNum: f.fns[0].lineNum };
+  return null;
 }
 
 export function selectPath(p) { STATE.selectedPath = p; }
@@ -37,3 +44,4 @@ export function setWalkIdx(i) {
 export function setActiveTab(name) { STATE.activeTab = name; }
 export function setSidebarFilter(s) { STATE.sidebarFilter = s; }
 export function setFunctionsSort(s) { STATE.functionsSort = s; }
+export function setTraceRoot(fn) { STATE.traceRoot = fn ? { name: fn.name, file: fn.file, lineNum: fn.lineNum } : null; }
