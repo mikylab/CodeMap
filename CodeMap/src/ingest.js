@@ -29,10 +29,6 @@ export async function ingestFromDrop(dataTransfer) {
   return { files: out, skipped, gitLog: ctx.gitLog };
 }
 
-export function ingestGitLogText(text) {
-  return parseGitLog(text);
-}
-
 async function walkEntry(entry, prefix, ctx) {
   if (entry.isFile) {
     const file = await new Promise((res, rej) => entry.file(res, rej));

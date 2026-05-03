@@ -40,8 +40,6 @@ function sortFns(fns, mode) {
       if (!riskCache.has(path)) {
         riskCache.set(path, computeRisk(fn._file, STATE.gitStatsByPath[path] || { commits: 0, lastTouched: 0 }));
       }
-      // Surface fn complexity as a tiebreaker so per-fn ordering within a file
-      // still tracks the intuitive "the gnarliest function rises".
       return riskCache.get(path) * 1000 + fn.cx;
     };
     return [...fns].sort((a, b) => riskOf(b) - riskOf(a));
@@ -128,8 +126,6 @@ function churnIndicator(fn) {
   if (!hasGitStats()) return null;
   const stats = STATE.gitStatsByPath[fn._file.path];
   if (!stats) return null;
-  // File-level churn — we cannot attribute commits to fns deterministically
-  // without an AST. The bar reflects the *file's* commit count.
   const max = maxFileCommits();
   const pct = max ? Math.min(100, (stats.commits / max) * 100) : 0;
   const fill = el('div', { cls: 'fn-churn-fill', style: { width: pct.toFixed(0) + '%' } });
