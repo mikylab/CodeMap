@@ -142,6 +142,16 @@ button, input, select { font: inherit; color: inherit; }
   .cx-high { background: #501313; color: #F7C1C1; }
 }
 
+/* ─── warning bar (skipped files, etc) ────────────────────────────────── */
+.warnbar {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--warn);
+  padding: 6px 14px;
+  background: var(--bg2);
+  border-bottom: 0.5px solid var(--border);
+}
+.warnbar[hidden] { display: none; }
+
 /* ─── stat bar ─────────────────────────────────────────────────────────── */
 .statbar {
   display: flex; border-bottom: 0.5px solid var(--border2);

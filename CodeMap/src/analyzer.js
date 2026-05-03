@@ -1,4 +1,7 @@
+import { mark, measure } from './perf.js';
+
 export function analyze(files) {
+  const t0 = mark();
   const libToPaths = new Map();
   for (const f of files) {
     for (const im of f.imports) {
@@ -34,5 +37,6 @@ export function analyze(files) {
     degree.set(e.b, (degree.get(e.b) || 0) + 1);
   }
 
+  measure('analyze', t0, `files=${files.length} libs=${libToPaths.size} edges=${unique.length}`);
   return { edges: unique, degree, libToPaths };
 }

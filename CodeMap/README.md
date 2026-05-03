@@ -36,6 +36,15 @@ picker. Files are read locally; nothing leaves your machine.
 - **Libraries** — every external/stdlib import aggregated, sorted by usage,
   with `stdlib` vs `external` labels.
 
+## Keyboard shortcuts
+
+- **1–6** — jump to tab (Overview / Walk / Functions / Trace / Graph / Libraries)
+- **← →** or **[ ]** — previous / next walk step
+- **j / k** — move down / up in the file sidebar
+
+Append `?perf=1` to the URL to log parse / analyze / render timings to the console.
+Files larger than 2MB are skipped; a banner above the stat bar lists how many.
+
 ## Supported languages
 
 JavaScript / JSX / TypeScript / TSX, Python, Go, Rust, Ruby, Java.
