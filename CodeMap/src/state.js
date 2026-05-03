@@ -129,12 +129,16 @@ export function gotoFileTraceHistory(idx) {
 }
 
 function defaultExpandedDirs(files) {
-  const top = new Set();
+  const dirs = new Set();
   for (const f of files) {
     const parts = f.path.split('/');
-    if (parts.length > 1) top.add(parts[0]);
+    let acc = '';
+    for (let i = 0; i < parts.length - 1; i++) {
+      acc = acc ? `${acc}/${parts[i]}` : parts[i];
+      dirs.add(acc);
+    }
   }
-  return top;
+  return dirs;
 }
 
 function expandAncestors(path) {
