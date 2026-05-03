@@ -1,9 +1,6 @@
 import { STATE, selectPath } from '../state.js';
 import { el, basename } from '../dom.js';
-import { renderGraph, hitTest } from '../graph.js';
-
-let resizeObserver = null;
-let hoveredPath = null;
+import { prepareGraph, renderGraph, hitTest } from '../graph.js';
 
 export function renderGraphView(onChange) {
   if (!STATE.files.length) return splash();
@@ -30,88 +27,104 @@ export function renderGraphView(onChange) {
 
 function attach(canvas, host, info, onChange) {
   if (!canvas.isConnected) return;
-  hoveredPath = null;
 
-  let result = renderGraph(canvas, STATE.files, { selectedPath: STATE.selectedPath });
-  renderInfo(info, result, onChange);
-
-  const draw = () => {
-    result = renderGraph(canvas, STATE.files, {
-      hoveredPath, selectedPath: STATE.selectedPath,
-    });
-    renderInfo(info, result, onChange);
+  const ctx = {
+    hoveredPath: null,
+    prepared: null,
+    preparedFor: '',  // signature: filesRef + WxH
   };
 
-  if (resizeObserver) { try { resizeObserver.disconnect(); } catch {} }
+  const draw = () => {
+    if (!host.isConnected) {
+      ro?.disconnect();
+      return;
+    }
+    const W = host.clientWidth || 600;
+    const H = host.clientHeight || 400;
+    const sig = `${STATE.files.length}|${W}x${H}`;
+    if (ctx.preparedFor !== sig) {
+      ctx.prepared = prepareGraph(STATE.files, W, H, STATE.libToPaths);
+      ctx.preparedFor = sig;
+    }
+    renderGraph(canvas, STATE.files, ctx.prepared, {
+      hoveredPath: ctx.hoveredPath,
+      selectedPath: STATE.selectedPath,
+    });
+    renderInfo(info, ctx, onChange);
+  };
+
+  let ro = null;
   if ('ResizeObserver' in window) {
-    resizeObserver = new ResizeObserver(draw);
-    resizeObserver.observe(host);
+    ro = new ResizeObserver(draw);
+    ro.observe(host);
+  } else {
+    draw();
   }
 
   canvas.addEventListener('mousemove', e => {
+    if (!ctx.prepared) return;
     const rect = canvas.getBoundingClientRect();
-    const hit = hitTest(result.layout, e.clientX - rect.left, e.clientY - rect.top);
+    const hit = hitTest(ctx.prepared.layout, e.clientX - rect.left, e.clientY - rect.top);
     const path = hit?.path || null;
     canvas.style.cursor = hit ? 'pointer' : 'default';
     canvas.title = hit ? hit.path : '';
-    if (path !== hoveredPath) {
-      hoveredPath = path;
+    if (path !== ctx.hoveredPath) {
+      ctx.hoveredPath = path;
       draw();
     }
   });
   canvas.addEventListener('mouseleave', () => {
-    if (hoveredPath !== null) { hoveredPath = null; draw(); }
+    if (ctx.hoveredPath !== null) { ctx.hoveredPath = null; draw(); }
   });
   canvas.addEventListener('click', e => {
+    if (!ctx.prepared) return;
     const rect = canvas.getBoundingClientRect();
-    const hit = hitTest(result.layout, e.clientX - rect.left, e.clientY - rect.top);
+    const hit = hitTest(ctx.prepared.layout, e.clientX - rect.left, e.clientY - rect.top);
     if (!hit) return;
     selectPath(hit.path);
     onChange();
   });
 }
 
-function renderInfo(info, result, onChange) {
+function renderInfo(info, ctx, onChange) {
   info.replaceChildren();
-  const focusPath = hoveredPath || STATE.selectedPath;
+  const focusPath = ctx.hoveredPath || STATE.selectedPath;
+  const edges = ctx.prepared?.edges || [];
+
   if (!focusPath) {
     info.appendChild(el('div', { cls: 'graph-info-empty', text: 'Hover or click a node to see its connections.' }));
-    info.appendChild(legend(result.edges.length));
+    info.appendChild(legend(edges.length));
     return;
   }
-  const file = STATE.byPath.get(focusPath);
-  if (!file) return;
+
+  const importEdges = [], langEdges = [];
+  for (const e of edges) {
+    if (e.a !== focusPath && e.b !== focusPath) continue;
+    (e.kind === 'import' ? importEdges : langEdges).push(e);
+  }
 
   info.appendChild(el('div', { cls: 'graph-info-title', text: basename(focusPath) }));
   info.appendChild(el('div', { cls: 'graph-info-sub', text: focusPath }));
 
-  const importEdges = result.edges.filter(e =>
-    (e.a === focusPath || e.b === focusPath) && e.kind === 'import');
-  const langEdges = result.edges.filter(e =>
-    (e.a === focusPath || e.b === focusPath) && e.kind === 'lang');
-
-  info.appendChild(section(
-    `Shared imports (${importEdges.length})`,
-    importEdges.map(e => connectionRow(e, focusPath, onChange)),
-    'no shared imports',
-  ));
-  info.appendChild(section(
-    `Same language (${langEdges.length})`,
-    langEdges.slice(0, 12).map(e => connectionRow(e, focusPath, onChange)),
-    'no same-language peers',
-    langEdges.length > 12 ? `+${langEdges.length - 12} more` : null,
-  ));
+  const sections = [
+    { title: `Shared imports (${importEdges.length})`, edges: importEdges, empty: 'no shared imports', cap: Infinity },
+    { title: `Same language (${langEdges.length})`,    edges: langEdges,    empty: 'no same-language peers', cap: 12 },
+  ];
+  for (const s of sections) info.appendChild(section(s, focusPath, onChange));
 }
 
-function section(title, rows, emptyMsg, footer) {
+function section({ title, edges, empty, cap }, focusPath, onChange) {
   const sec = el('div', { cls: 'graph-info-sec' });
   sec.appendChild(el('div', { cls: 'graph-info-sec-title', text: title }));
-  if (!rows.length) {
-    sec.appendChild(el('div', { cls: 'graph-info-empty-sm', text: emptyMsg }));
+  if (!edges.length) {
+    sec.appendChild(el('div', { cls: 'graph-info-empty-sm', text: empty }));
     return sec;
   }
-  for (const r of rows) sec.appendChild(r);
-  if (footer) sec.appendChild(el('div', { cls: 'graph-info-empty-sm', text: footer }));
+  const visible = edges.slice(0, cap);
+  for (const e of visible) sec.appendChild(connectionRow(e, focusPath, onChange));
+  if (edges.length > visible.length) {
+    sec.appendChild(el('div', { cls: 'graph-info-empty-sm', text: `+${edges.length - visible.length} more` }));
+  }
   return sec;
 }
 
@@ -124,7 +137,10 @@ function connectionRow(e, focusPath, onChange) {
   });
   row.appendChild(el('span', { cls: 'graph-conn-name', text: basename(otherPath) }));
   if (e.libs?.length) {
-    row.appendChild(el('span', { cls: 'graph-conn-tag', text: e.libs.slice(0, 2).join(', ') + (e.libs.length > 2 ? '…' : '') }));
+    row.appendChild(el('span', {
+      cls: 'graph-conn-tag',
+      text: e.libs.slice(0, 2).join(', ') + (e.libs.length > 2 ? '…' : ''),
+    }));
   }
   return row;
 }
