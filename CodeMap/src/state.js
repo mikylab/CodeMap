@@ -29,6 +29,8 @@ export const STATE = {
   sidebarFilter: '',
   functionsSort: 'cx',
   traceRoot: null,
+  traceHistory: [],         // ordered list of {name, file, lineNum} visited
+  traceHistoryIdx: -1,      // current position within traceHistory
   traceView: 'tree',
   skipped: newSkipped(),
 };
@@ -50,13 +52,15 @@ export function setFiles(files, analysis = EMPTY_ANALYSIS) {
   STATE.fanOut = analysis.fanOut || new Map();
   STATE.walk = generateWalk(STATE);
   STATE.walkIdx = 0;
-  // Default trace: pick the most-reaching entry of the first file.
+  // Initial trace defaults to first file's best entry, but the user is in charge from there.
   const firstFile = files[0] || null;
   STATE.selectedPath = firstFile ? firstFile.path : null;
   const entry = firstFile
     ? pickEntryForFile(firstFile, STATE.callsByFn, STATE.callersByFn, STATE.fnByKey)
     : null;
   STATE.traceRoot = fnToTraceRoot(entry);
+  STATE.traceHistory = entry ? [STATE.traceRoot] : [];
+  STATE.traceHistoryIdx = entry ? 0 : -1;
 }
 
 function indexByName(fns) {
@@ -70,12 +74,42 @@ function fnToTraceRoot(fn) {
 }
 
 export function selectPath(p) {
+  // Pure expansion in the sidebar — does NOT change the trace root. The user
+  // explicitly clicks a function to start tracing.
   STATE.selectedPath = p;
-  const file = STATE.byPath.get(p);
-  if (file) {
-    const entry = pickEntryForFile(file, STATE.callsByFn, STATE.callersByFn, STATE.fnByKey);
-    STATE.traceRoot = fnToTraceRoot(entry);
+}
+
+export function pushTraceRoot(fn) {
+  if (!fn) return;
+  const ref = fnToTraceRoot(fn);
+  STATE.traceRoot = ref;
+  // Truncate any forward history if we navigated back and re-branched.
+  if (STATE.traceHistoryIdx < STATE.traceHistory.length - 1) {
+    STATE.traceHistory = STATE.traceHistory.slice(0, STATE.traceHistoryIdx + 1);
   }
+  // De-dupe consecutive entries.
+  const last = STATE.traceHistory[STATE.traceHistory.length - 1];
+  if (!last || last.name !== ref.name || last.file !== ref.file || last.lineNum !== ref.lineNum) {
+    STATE.traceHistory.push(ref);
+  }
+  STATE.traceHistoryIdx = STATE.traceHistory.length - 1;
+}
+
+export function gotoTraceHistory(idx) {
+  if (idx < 0 || idx >= STATE.traceHistory.length) return;
+  STATE.traceHistoryIdx = idx;
+  STATE.traceRoot = STATE.traceHistory[idx];
+  STATE.selectedPath = STATE.traceRoot.file;
+}
+
+export function clearTraceHistory(fn) {
+  // Resets history with `fn` as the new origin. Used when the user explicitly
+  // starts a new trace from the sidebar function list.
+  const ref = fn ? fnToTraceRoot(fn) : null;
+  STATE.traceRoot = ref;
+  STATE.traceHistory = ref ? [ref] : [];
+  STATE.traceHistoryIdx = ref ? 0 : -1;
+  if (ref) STATE.selectedPath = ref.file;
 }
 
 export function setWalkIdx(i) {
@@ -86,7 +120,7 @@ export function setWalkIdx(i) {
 export function setActiveTab(name) { STATE.activeTab = name; }
 export function setSidebarFilter(s) { STATE.sidebarFilter = s; }
 export function setFunctionsSort(s) { STATE.functionsSort = s; }
-export function setTraceRoot(fn) { STATE.traceRoot = fnToTraceRoot(fn); }
+export function setTraceRoot(fn) { pushTraceRoot(fn); }
 export function setTraceView(v) { STATE.traceView = v === 'graph' ? 'graph' : 'tree'; }
 export function setSkipped(s) { STATE.skipped = s || newSkipped(); }
 

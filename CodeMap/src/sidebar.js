@@ -1,5 +1,6 @@
-import { STATE, selectPath, setSidebarFilter, visibleFiles } from './state.js';
+import { STATE, selectPath, setSidebarFilter, visibleFiles, clearTraceHistory, setActiveTab } from './state.js';
 import { cxBucket } from './tabs.js';
+import { fnKey } from './trace-graph.js';
 import { el, clear, alpha } from './dom.js';
 
 export function renderSidebar(onChange) {
@@ -34,7 +35,11 @@ function fileList(onChange) {
     list.appendChild(el('div', { cls: 'sb-empty', text: STATE.files.length ? 'no matches' : 'drop a folder' }));
     return list;
   }
-  for (const f of visible) list.appendChild(fileItem(f, onChange));
+  const activeFnKey = STATE.traceRoot ? `${STATE.traceRoot.file}::${STATE.traceRoot.name}@${STATE.traceRoot.lineNum}` : null;
+  for (const f of visible) {
+    list.appendChild(fileItem(f, onChange));
+    if (STATE.selectedPath === f.path) list.appendChild(fnList(f, activeFnKey, onChange));
+  }
   return list;
 }
 
@@ -45,10 +50,39 @@ function fileItem(f, onChange) {
     title: f.path,
     on: { click: () => { selectPath(f.path); onChange(); } },
   });
+  item.appendChild(el('span', { cls: 'sb-twirl', text: active ? '▾' : '▸' }));
   item.appendChild(extBadge(f));
   item.appendChild(el('span', { cls: 'file-name', text: f.name }));
   item.appendChild(el('span', { cls: `file-cx cx-${cxBucket(f.cx)}-fg`, text: f.cx.toFixed(1) }));
   return item;
+}
+
+function fnList(f, activeFnKey, onChange) {
+  const wrap = el('div', { cls: 'sb-fn-list' });
+  if (!f.fns.length) {
+    wrap.appendChild(el('div', { cls: 'sb-fn-empty', text: 'no functions detected' }));
+    return wrap;
+  }
+  const fns = f.fns.slice().sort((a, b) => a.lineNum - b.lineNum);
+  for (const fn of fns) {
+    const isActive = fnKey(fn) === activeFnKey;
+    wrap.appendChild(el('button', {
+      cls: `sb-fn${isActive ? ' active' : ''}`,
+      type: 'button',
+      title: `${fn.name}() · L${fn.lineNum} · cx:${fn.cx}`,
+      on: {
+        click: () => {
+          clearTraceHistory(fn);
+          setActiveTab('trace');
+          onChange();
+        },
+      },
+    }, [
+      el('span', { cls: 'sb-fn-name', text: fn.name }),
+      el('span', { cls: `sb-fn-cx cx-${cxBucket(fn.cx)}-fg`, text: String(fn.cx) }),
+    ]));
+  }
+  return wrap;
 }
 
 function extBadge(f) {

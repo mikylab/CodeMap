@@ -127,6 +127,84 @@ button, input, select { font: inherit; color: inherit; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .file-cx { font-size: 9px; font-weight: 500; flex-shrink: 0; }
+.sb-twirl {
+  font-family: var(--font-mono); font-size: 9px; color: var(--muted);
+  width: 8px; flex-shrink: 0; line-height: 1;
+}
+
+.sb-fn-list {
+  background: var(--bg);
+  border-left: 2px solid var(--border2);
+  margin-left: 14px;
+  padding: 2px 0 4px;
+}
+.sb-fn-empty {
+  font-family: var(--font-mono); font-size: 10px; color: var(--muted);
+  padding: 4px 12px; font-style: italic;
+}
+.sb-fn {
+  display: flex; align-items: center; gap: 6px;
+  width: 100%; padding: 3px 14px 3px 12px;
+  background: transparent; border: none;
+  font-family: var(--font-mono); font-size: 11px; color: var(--text);
+  cursor: pointer; text-align: left;
+  transition: background 0.1s;
+}
+.sb-fn:hover { background: var(--bg2); }
+.sb-fn.active {
+  background: var(--bg3);
+  color: var(--accent);
+  font-weight: 500;
+}
+.sb-fn-name {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sb-fn-cx { font-size: 9px; flex-shrink: 0; }
+
+/* ─── trace: breadcrumb trail ─────────────────────────────────────────── */
+.trace-crumbs {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px; background: var(--bg2);
+  border-bottom: 0.5px solid var(--border);
+  overflow-x: auto;
+}
+.crumb-nav {
+  font-family: var(--font-mono); font-size: 12px; line-height: 1;
+  width: 22px; height: 22px;
+  border: 0.5px solid var(--border2); background: var(--bg); color: var(--text);
+  border-radius: 4px; cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.crumb-nav:hover:not(:disabled) { background: var(--bg3); border-color: var(--accent); color: var(--accent); }
+.crumb-nav:disabled { opacity: 0.35; cursor: not-allowed; }
+.crumb-trail {
+  display: flex; align-items: center; gap: 4px;
+  flex: 1; min-width: 0; overflow-x: auto;
+  flex-wrap: nowrap;
+}
+.crumb {
+  font-family: var(--font-mono); font-size: 11px;
+  padding: 3px 8px; border-radius: 4px;
+  border: 0.5px solid var(--border2); background: var(--bg); color: var(--muted);
+  cursor: pointer; flex-shrink: 0;
+  transition: all 0.15s;
+}
+.crumb:hover { color: var(--text); border-color: var(--accent); }
+.crumb.current {
+  color: var(--text); border-color: var(--accent); background: var(--bg3); font-weight: 500;
+}
+.crumb.origin { border-left-width: 2px; border-left-color: var(--success); }
+.crumb-sep {
+  font-family: var(--font-mono); font-size: 12px; color: var(--muted); flex-shrink: 0;
+}
+.crumb-clear {
+  font-family: var(--font-mono); font-size: 10px;
+  padding: 3px 8px; border-radius: 4px;
+  border: 0.5px solid var(--border2); background: transparent; color: var(--muted);
+  cursor: pointer; flex-shrink: 0;
+}
+.crumb-clear:hover { color: var(--danger); border-color: var(--danger); }
 
 /* complexity color tokens */
 .cx-low-fg  { color: var(--success); }
