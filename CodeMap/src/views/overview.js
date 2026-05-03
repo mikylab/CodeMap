@@ -1,10 +1,12 @@
-import { STATE } from '../state.js';
+import { STATE, hasGitStats } from '../state.js';
 import { cxBucket } from '../tabs.js';
 import { el } from '../dom.js';
+import { renderHotspotsCard } from './hotspots-card.js';
 
 export function renderOverview() {
   if (!STATE.files.length) return splash();
   const grid = el('div', { cls: 'ov-grid' });
+  if (hasGitStats()) grid.appendChild(renderHotspotsCard());
   grid.appendChild(card('Lines by file', barRows(linesData(), 'lang')));
   grid.appendChild(card('Functions by file', barRows(fnsData(), 'success')));
   grid.appendChild(card('Complexity by file', barRows(cxData(), 'cx')));

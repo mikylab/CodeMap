@@ -8,8 +8,14 @@ export function renderToolbar(onTabChange, onDropClick) {
   root.appendChild(logo());
   root.appendChild(tabPills(onTabChange));
   root.appendChild(el('div', { cls: 'tb-spacer' }));
+  if (STATE.gitLogIngestedAt) root.appendChild(historyPill());
   root.appendChild(projectBadge());
   root.appendChild(dropButton(onDropClick));
+}
+
+function historyPill() {
+  const n = Object.keys(STATE.gitStatsByPath).length;
+  return el('div', { cls: 'tb-history-pill', text: 'history loaded', title: `${n} files with git history` });
 }
 
 function logo() {

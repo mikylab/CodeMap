@@ -713,3 +713,29 @@ button, input, select { font: inherit; color: inherit; }
   font-family: var(--font-mono); font-size: 13px;
   color: var(--accent); text-align: center;
 }
+
+/* phase 8c — git history & hotspots */
+.tb-history-pill {
+  font-family: var(--font-mono); font-size: 10px; color: var(--success);
+  border: 0.5px solid var(--success); background: var(--bg);
+  border-radius: 4px; padding: 4px 8px; margin-right: 6px;
+}
+.hotspots-card { grid-column: 1 / -1; }
+.hotspot-rows { display: flex; flex-direction: column; gap: 4px; }
+.hotspot-row {
+  display: grid;
+  grid-template-columns: 160px 1fr 40px 220px;
+  gap: 8px; align-items: center;
+  font-family: var(--font-mono); font-size: 11px; color: var(--text);
+}
+.hotspot-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hotspot-score { text-align: right; color: var(--muted); }
+.hotspot-meta  { color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hotspot-bar-low  { background: var(--success); }
+.hotspot-bar-mid  { background: var(--warn); }
+.hotspot-bar-high { background: var(--danger); }
+.fn-churn {
+  width: 36px; height: 4px; background: var(--bg3); border-radius: 2px;
+  overflow: hidden; margin-left: 4px;
+}
+.fn-churn-fill { height: 100%; background: var(--accent); }

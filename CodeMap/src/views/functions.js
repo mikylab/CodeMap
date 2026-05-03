@@ -1,12 +1,14 @@
-import { STATE, setFunctionsSort, selectPath, setTraceRoot, setActiveTab, toggleFnExpanded } from '../state.js';
+import { STATE, setFunctionsSort, selectPath, setTraceRoot, setActiveTab, toggleFnExpanded, hasGitStats } from '../state.js';
 import { cxBucket } from '../tabs.js';
 import { fnKey } from '../trace-graph.js';
 import { el, basename } from '../dom.js';
+import { computeRisk } from '../risk.js';
 
 const SORTS = [
   { id: 'name', label: 'Name' },
   { id: 'lines', label: 'Lines ↓' },
   { id: 'cx', label: 'Complexity ↓' },
+  { id: 'risk', label: 'Risk ↓', requiresGit: true },
 ];
 
 export function renderFunctions(onChange) {
@@ -31,6 +33,19 @@ function collectFns() {
 }
 
 function sortFns(fns, mode) {
+  if (mode === 'risk' && hasGitStats()) {
+    const riskCache = new Map();
+    const riskOf = fn => {
+      const path = fn._file.path;
+      if (!riskCache.has(path)) {
+        riskCache.set(path, computeRisk(fn._file, STATE.gitStatsByPath[path] || { commits: 0, lastTouched: 0 }));
+      }
+      // Surface fn complexity as a tiebreaker so per-fn ordering within a file
+      // still tracks the intuitive "the gnarliest function rises".
+      return riskCache.get(path) * 1000 + fn.cx;
+    };
+    return [...fns].sort((a, b) => riskOf(b) - riskOf(a));
+  }
   const cmp =
     mode === 'name' ? (a, b) => a.name.localeCompare(b.name) :
     mode === 'lines' ? (a, b) => b.lines - a.lines :
@@ -44,7 +59,9 @@ function toolbar(count, onChange) {
   const sel = el('select', {
     on: { change: e => { setFunctionsSort(e.target.value); onChange(); } },
   });
+  const gitOk = hasGitStats();
   for (const s of SORTS) {
+    if (s.requiresGit && !gitOk) continue;
     const opt = el('option', { value: s.id, text: s.label });
     if (s.id === STATE.functionsSort) opt.selected = true;
     sel.appendChild(opt);
@@ -89,6 +106,8 @@ function row(fn, key, expanded, onChange) {
   r.appendChild(el('span', { cls: 'fn-file', text: fn._file.name, title: fn._file.path }));
   r.appendChild(el('span', { cls: 'fn-lines', text: `${fn.lines}L` }));
   r.appendChild(el('span', { cls: `cx-badge cx-${cxBucket(fn.cx)}`, text: String(fn.cx) }));
+  const churn = churnIndicator(fn);
+  if (churn) r.appendChild(churn);
   r.appendChild(el('button', {
     cls: 'fn-trace-btn', type: 'button', text: 'trace →',
     title: 'Trace this function in the call graph',
@@ -103,6 +122,35 @@ function row(fn, key, expanded, onChange) {
     },
   }));
   return r;
+}
+
+function churnIndicator(fn) {
+  if (!hasGitStats()) return null;
+  const stats = STATE.gitStatsByPath[fn._file.path];
+  if (!stats) return null;
+  // File-level churn — we cannot attribute commits to fns deterministically
+  // without an AST. The bar reflects the *file's* commit count.
+  const max = maxFileCommits();
+  const pct = max ? Math.min(100, (stats.commits / max) * 100) : 0;
+  const fill = el('div', { cls: 'fn-churn-fill', style: { width: pct.toFixed(0) + '%' } });
+  return el('div', {
+    cls: 'fn-churn',
+    title: `${stats.commits} commits to ${fn._file.name} (file-level — fn-level attribution requires an AST)`,
+  }, [fill]);
+}
+
+let _maxCommitsCache = null;
+let _maxCommitsCacheKey = null;
+function maxFileCommits() {
+  if (_maxCommitsCacheKey === STATE.gitLogIngestedAt && _maxCommitsCache != null) return _maxCommitsCache;
+  let m = 0;
+  for (const k in STATE.gitStatsByPath) {
+    const c = STATE.gitStatsByPath[k].commits;
+    if (c > m) m = c;
+  }
+  _maxCommitsCache = m;
+  _maxCommitsCacheKey = STATE.gitLogIngestedAt;
+  return m;
 }
 
 function sourceBlock(fn) {

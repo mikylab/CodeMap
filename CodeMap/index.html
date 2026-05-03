@@ -24,7 +24,8 @@
   <script type="module">
     import { ingestFromDrop, newSkipped, noteTooLarge, MAX_BYTES } from './src/ingest.js';
     import { parseFile } from './src/parser.js';
-    import { setFiles, setSkipped, setActiveTab, selectFileByOffset, STATE } from './src/state.js';
+    import { parseGitLog, looksLikeGitLog } from './src/git-log.js';
+    import { setFiles, setSkipped, setActiveTab, selectFileByOffset, setGitStats, STATE } from './src/state.js';
     import { TABS } from './src/tabs.js';
     import { analyze } from './src/analyzer.js';
     import { renderAll, stepWalk } from './src/renderer.js';
@@ -46,11 +47,12 @@
       warnbar.hidden = false;
     }
 
-    function ingestComplete(files, skipped) {
+    function ingestComplete(files, skipped, gitLog) {
       const t0 = mark();
       const analysis = analyze(files);
       setFiles(files, analysis);
       setSkipped(skipped);
+      if (gitLog) setGitStats(gitLog.byPath);
       renderWarnings();
       renderAll();
       measure('renderAll', t0);
@@ -65,23 +67,26 @@
     document.body.addEventListener('drop', async e => {
       e.preventDefault();
       showOverlay(false);
-      const { files, skipped } = await ingestFromDrop(e.dataTransfer);
-      ingestComplete(files, skipped);
+      const { files, skipped, gitLog } = await ingestFromDrop(e.dataTransfer);
+      ingestComplete(files, skipped, gitLog);
     });
 
     picker.addEventListener('change', async e => {
       const skipped = newSkipped();
       const t0 = mark();
+      let gitLog = null;
       const parsed = await Promise.all([...e.target.files].map(async f => {
         const path = f.webkitRelativePath || f.name;
         if (f.size > MAX_BYTES) { noteTooLarge(skipped, path, f.size); return null; }
-        const p = parseFile(f.name, await f.text(), path);
+        const text = await f.text();
+        if (looksLikeGitLog(text)) { gitLog = parseGitLog(text); return null; }
+        const p = parseFile(f.name, text, path);
         if (!p) skipped.unsupported++;
         return p;
       }));
       const out = parsed.filter(Boolean);
       measure('ingest(picker)', t0, `parsed=${out.length}`);
-      ingestComplete(out, skipped);
+      ingestComplete(out, skipped, gitLog);
     });
 
     document.addEventListener('keydown', e => {

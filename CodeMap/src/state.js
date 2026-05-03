@@ -39,7 +39,18 @@ export const STATE = {
   fileTraceRoot: null,
   fileTraceHistory: [],
   fileTraceHistoryIdx: -1,
+  gitStatsByPath: {},
+  gitLogIngestedAt: null,
 };
+
+export function setGitStats(byPath, ingestedAt = Date.now()) {
+  STATE.gitStatsByPath = byPath || {};
+  STATE.gitLogIngestedAt = byPath ? ingestedAt : null;
+}
+
+export function hasGitStats() {
+  return !!STATE.gitLogIngestedAt && Object.keys(STATE.gitStatsByPath).length > 0;
+}
 
 // `traceRoot` is derived from history rather than stored — single source of truth.
 export function getTraceRoot() {
