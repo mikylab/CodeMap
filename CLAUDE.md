@@ -125,17 +125,23 @@ Per-file complexity = `score / max(fn_count, 1)`, clamped to `[1, 30]`.
 
 Walk steps are generated deterministically from parsed state. All string content must be constructed from data (file names, counts, line numbers) — never hardcoded.
 
-| Step | Condition | Files included |
-|---|---|---|
-| Project overview | always | all |
-| Entry points | any file matches `/\b(main\|index\|app\|run\|server\|cli\|__main__)\b/i` | matched files |
-| Core modules | always | top 3 by `lineCount` |
-| Complexity hotspots | any fn with `cx >= 7` | files containing those fns |
-| Utilities | any file matches `/\b(util\|helper\|common\|shared\|lib\|tools\|core)\b/i` | matched files |
-| Config/schema | any file matches `/\b(config\|settings\|schema\|constants\|env\|types\|interfaces)\b/i` | matched files |
-| External deps | always | none (shows import data) |
+Walker prefers **call-graph and import-graph signal** over filename heuristics. Filename regex is a fallback when graph data is sparse.
 
-Steps for which the condition is not met are omitted entirely.
+| Step | Condition | Source of signal |
+|---|---|---|
+| Project overview | always | file/lang counts |
+| Project archetype | any import matches a known framework lib (web / CLI / worker / desktop) | `f.imports[].lib` ∩ `ARCHETYPES[].libs` |
+| Entry points | any fn with `fanIn = 0` and `transitiveReach ≥ 3`, OR filename matches `/\b(main\|index\|app\|run\|server\|cli\|__main__)\b/i` | `STATE.fanIn`, `STATE.callsByFn`; filename as fallback |
+| First hop | top entry fn has any resolved callees | top callees ranked by `STATE.fanOut` |
+| Core modules | always | top 3 by **incoming import count** (`STATE.fileImporters`); falls back to `lineCount` when no import edges resolved |
+| Boundary | any file imports a lib in the `BOUNDARY_LIBS` set (network / fs / db / cloud) | `f.imports[].lib` ∩ `BOUNDARY_LIBS` |
+| Complexity hotspots | any fn with `cx ≥ 7` | ranked by `cx × (1 + fanIn)`, not raw `cx` |
+| Utilities | filename matches `/\b(util\|helper\|common\|shared\|lib\|tools\|core)\b/i` | filename only |
+| Config/schema | filename matches `/\b(config\|settings\|schema\|constants\|env\|types\|interfaces)\b/i` | filename only |
+| Orphans | files with no incoming import edges and no fns appearing as call targets, excluding entries and tests | `STATE.fileImporters`, `STATE.fanIn` |
+| External deps | always | aggregated `f.imports` |
+
+Steps for which the condition is not met are omitted entirely. Walker degrades gracefully when call-graph maps are missing — it falls back to filename / lineCount signal so it still produces a useful tour on a parse-only state.
 
 ---
 

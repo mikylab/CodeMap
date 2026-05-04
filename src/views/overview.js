@@ -4,12 +4,18 @@ import { el } from '../dom.js';
 
 export function renderOverview() {
   if (!STATE.files.length) return splash();
+  const wrap = el('div', { cls: 'ov-root' });
+  wrap.appendChild(el('div', { cls: 'view-hint' }, [
+    el('span', { cls: 'view-hint-name', text: 'Overview' }),
+    el('span', { text: ' — High-level shape of the repo: where the lines, functions, and complexity sit.' }),
+  ]));
   const grid = el('div', { cls: 'ov-grid' });
   grid.appendChild(card('Lines by file', barRows(linesData(), 'lang')));
   grid.appendChild(card('Functions by file', barRows(fnsData(), 'success')));
   grid.appendChild(card('Complexity by file', barRows(cxData(), 'cx')));
   grid.appendChild(card('Language breakdown', barRows(langData(), 'lang')));
-  return grid;
+  wrap.appendChild(grid);
+  return wrap;
 }
 
 function splash() {

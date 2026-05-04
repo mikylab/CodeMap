@@ -16,6 +16,11 @@ export function renderFunctions(onChange) {
   ]);
   const wrap = el('div', { cls: 'fn-root' });
   const allFns = collectFns();
+  const scope = STATE.selectedPath ? `${STATE.selectedPath}` : 'all files';
+  wrap.appendChild(el('div', { cls: 'view-hint' }, [
+    el('span', { cls: 'view-hint-name', text: 'Functions' }),
+    el('span', { text: ` — Flat, sortable list of every function in ${scope}. Click a function to see its source; click "trace" to follow what it calls.` }),
+  ]));
   wrap.appendChild(toolbar(allFns.length, onChange));
   wrap.appendChild(rowList(allFns, onChange));
   return wrap;

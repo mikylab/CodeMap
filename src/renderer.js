@@ -1,4 +1,4 @@
-import { STATE, setWalkIdx } from './state.js';
+import { STATE } from './state.js';
 import { renderToolbar } from './toolbar.js';
 import { renderSidebar } from './sidebar.js';
 import { renderStatBar } from './statbar.js';
@@ -35,7 +35,3 @@ function viewFor(tab) {
   }
 }
 
-export function stepWalk(delta) {
-  setWalkIdx(STATE.walkIdx + delta);
-  renderAll();
-}

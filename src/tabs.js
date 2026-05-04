@@ -23,11 +23,15 @@ export function cxBucket(cx) {
 export function STEP_COLORS() {
   return {
     meta:       '#888780',
+    archetype:  '#C76FBF',
     entry:      '#1D9E75',
+    hop:        '#34B98C',
     core:       '#3B8BD4',
+    boundary:   '#D88A4A',
     complexity: '#E24B4A',
     utils:      '#EF9F27',
     config:     '#7F77DD',
+    orphans:    '#7A776D',
     deps:       '#5DCAA5',
   };
 }

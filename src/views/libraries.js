@@ -8,11 +8,20 @@ export function renderLibraries() {
     el('div', { cls: 'splash-sub', text: 'Drop a folder to detect external dependencies.' }),
   ]);
   const records = collect();
-  if (!records.length) return el('div', { cls: 'sb-empty', text: 'no imports detected' });
+  const wrap = el('div', { cls: 'lib-root' });
+  wrap.appendChild(el('div', { cls: 'view-hint' }, [
+    el('span', { cls: 'view-hint-name', text: 'Libraries' }),
+    el('span', { text: ' — External and standard-library imports detected across the repo, sorted by usage.' }),
+  ]));
+  if (!records.length) {
+    wrap.appendChild(el('div', { cls: 'sb-empty', text: 'no imports detected' }));
+    return wrap;
+  }
   const max = Math.max(...records.map(r => r.count));
   const grid = el('div', { cls: 'lib-grid' });
   for (const r of records) grid.appendChild(card(r, max));
-  return grid;
+  wrap.appendChild(grid);
+  return wrap;
 }
 
 function collect() {

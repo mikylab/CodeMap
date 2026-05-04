@@ -27,7 +27,7 @@
     import { setFiles, setSkipped, setActiveTab, selectFileByOffset, STATE } from './src/state.js';
     import { TABS } from './src/tabs.js';
     import { analyze } from './src/analyzer.js';
-    import { renderAll, stepWalk } from './src/renderer.js';
+    import { renderAll } from './src/renderer.js';
     import { mark, measure } from './src/perf.js';
 
     const overlay = document.getElementById('drop-overlay');
@@ -87,9 +87,6 @@
     document.addEventListener('keydown', e => {
       if (e.target.matches('input, textarea, select, [contenteditable]')) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-
-      if (e.key === 'ArrowLeft' || e.key === '[') { e.preventDefault(); stepWalk(-1); return; }
-      if (e.key === 'ArrowRight' || e.key === ']') { e.preventDefault(); stepWalk(1); return; }
 
       if (/^[1-6]$/.test(e.key)) {
         const t = TABS[Number(e.key) - 1];

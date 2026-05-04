@@ -25,9 +25,12 @@ picker. Files are read locally; nothing leaves your machine.
 ## Tabs
 
 - **Overview** — bar charts of lines, functions, complexity, and language mix.
-- **Walk** — auto-generated guided walkthrough: project overview → entry points
-  → core modules → complexity hotspots → utilities → config → external deps.
-  Use ←/→ or click progress dots to navigate. Function chips jump to Trace.
+- **Walk** — auto-generated guided walkthrough driven by the call graph and
+  import graph (with filename heuristics as fallback). Order: overview →
+  archetype → entry points → first hop → core modules → boundary → complexity
+  hotspots → utilities → config → orphans → external deps. Steps without
+  signal are skipped. Use ←/→ or click progress dots to navigate. Function
+  chips jump to Trace, so Walk doubles as an index into the execution map.
 - **Functions** — sortable flat list (by name, lines, or complexity). Clicking a
   row roots the Trace tab at that function.
 - **Trace** — execution map driven from the sidebar. Click a file in the

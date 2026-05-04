@@ -1,4 +1,4 @@
-import { STATE, setTraceRoot, selectPath, gotoTraceHistory, clearTraceHistory, getTraceRoot } from '../state.js';
+import { STATE, setTraceRoot, selectPath, gotoTraceHistory, clearTraceHistory, getTraceRoot, toggleTraceSource } from '../state.js';
 import { cxBucket } from '../tabs.js';
 import { buildTraceTree, fnKey } from '../trace-graph.js';
 import { el, basename } from '../dom.js';
@@ -122,8 +122,12 @@ function hint(root, tree) {
   const depth = tree.subtree.depth;
   const filesTouched = tree.subtree.files.size;
   const hotspots = tree.subtree.hotspots;
-  const text = `${root.file} → ${root.name}() touches ${reach} function${reach === 1 ? '' : 's'} across ${filesTouched} file${filesTouched === 1 ? '' : 's'}, max chain depth ${depth}, ${hotspots} complexity hotspot${hotspots === 1 ? '' : 's'}.`;
-  return el('div', { cls: 'view-hint', text });
+  const stats = `${root.file} → ${root.name}() touches ${reach} function${reach === 1 ? '' : 's'} across ${filesTouched} file${filesTouched === 1 ? '' : 's'}, max chain depth ${depth}, ${hotspots} complexity hotspot${hotspots === 1 ? '' : 's'}.`;
+  return el('div', { cls: 'view-hint' }, [
+    el('span', { cls: 'view-hint-name', text: 'Trace' }),
+    el('span', { text: ' — Pick a function, follow what it calls and who calls it. ' }),
+    el('span', { cls: 'view-hint-stat', text: stats }),
+  ]);
 }
 
 function body(tree, onChange) {
@@ -243,7 +247,46 @@ function nodeDetail(selected, onChange) {
     cls: 'trace-file-link', type: 'button', text: fn.file,
     on: { click: () => { selectPath(fn.file); onChange(); } },
   }));
+
+  wrap.appendChild(sourceSection(fn, onChange));
   return wrap;
+}
+
+function sourceSection(fn, onChange) {
+  const wrap = el('div', { cls: 'trace-source-section' });
+  const open = STATE.expandedTraceSource;
+  const toggle = el('button', {
+    cls: 'trace-source-toggle', type: 'button',
+    text: `${open ? '▾' : '▸'} Source · ${fn.file}:${fn.lineNum}`,
+    on: { click: () => { toggleTraceSource(); onChange(); } },
+  });
+  wrap.appendChild(toggle);
+  if (!open) return wrap;
+  const lines = extractFnSource(fn);
+  if (!lines.length) {
+    wrap.appendChild(el('div', { cls: 'fn-source-empty', text: 'source unavailable' }));
+    return wrap;
+  }
+  const pre = el('pre', { cls: 'fn-source-pre trace-source-pre' });
+  const startLine = fn.lineNum;
+  for (let i = 0; i < lines.length; i++) {
+    const lineNo = startLine + i;
+    const row = el('div', { cls: 'fn-source-line' });
+    row.appendChild(el('span', { cls: 'fn-source-num', text: String(lineNo) }));
+    row.appendChild(el('span', { cls: 'fn-source-code', text: lines[i] }));
+    pre.appendChild(row);
+  }
+  wrap.appendChild(pre);
+  return wrap;
+}
+
+function extractFnSource(fn) {
+  const file = STATE.byPath.get(fn.file);
+  if (!file || !file.src) return [];
+  const all = file.src.split('\n');
+  const start = Math.max(0, fn.lineNum - 1);
+  const end = Math.min(all.length, start + (fn.lines || 1) + 1);
+  return all.slice(start, end);
 }
 
 function collectHotspots(tree) {

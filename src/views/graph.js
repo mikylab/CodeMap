@@ -1,37 +1,94 @@
-import { STATE, selectPath, setFileTraceRoot, gotoFileTraceHistory } from '../state.js';
+import { STATE, selectPath, setFileTraceRoot, gotoFileTraceHistory, toggleGraphDir, resetGraphView } from '../state.js';
 import { el, basename, alpha } from '../dom.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-const COL_W = 260;
-const ROW_H = 64;
-const NODE_W = 220;
-const NODE_H = 48;
-const PAD = 24;
-const MAX_DEPTH = 5;
 
 export function renderGraphView(onChange) {
   if (!STATE.files.length) return splash();
 
   const focusPath = currentRoot();
-  if (!focusPath) return pickPrompt();
-  const focusFile = STATE.byPath.get(focusPath);
-  if (!focusFile) return pickPrompt();
+  const focusFile = focusPath ? STATE.byPath.get(focusPath) : null;
 
   const wrap = el('div', { cls: 'graph-root' });
   wrap.appendChild(breadcrumbs(onChange));
-  wrap.appendChild(el('div', {
-    cls: 'view-hint',
-    text: 'A file trace: pick a file in the sidebar (or double-click a node) to re-root. Arrows point from a file to the files it imports. The right panel lists files that import this one.',
-  }));
-
-  const tree = buildFileTree(focusPath);
-  wrap.appendChild(hint(focusFile, tree));
+  wrap.appendChild(el('div', { cls: 'view-hint' }, [
+    el('span', { cls: 'view-hint-name', text: 'Graph' }),
+    el('span', { text: ' — Whole-repo file map. Each node is a file; arrows point from a file to the files it imports. Click a node to focus, double-click to re-root the file trace.' }),
+  ]));
+  wrap.appendChild(legend(onChange));
+  wrap.appendChild(dirToggleBar(onChange));
 
   const stage = el('div', { cls: 'graph-stage' });
-  stage.appendChild(graphHost(tree, onChange));
+  stage.appendChild(graphCanvas(focusPath, onChange));
   stage.appendChild(infoPane(focusFile, onChange));
   wrap.appendChild(stage);
   return wrap;
+}
+
+function legend(onChange) {
+  const wrap = el('div', { cls: 'graph-legend' });
+  const importEdges = countImportEdges();
+  wrap.appendChild(el('span', {
+    cls: 'graph-legend-stat',
+    text: `${STATE.files.length} files · ${importEdges} import edges`,
+  }));
+  wrap.appendChild(el('span', { cls: 'graph-legend-sep', text: '·' }));
+  wrap.appendChild(legendSwatch('var(--accent)', 'imports →'));
+  wrap.appendChild(legendSwatch('var(--success)', 'imported by ←'));
+  wrap.appendChild(el('span', { cls: 'graph-legend-hint', text: 'scroll = zoom · drag = pan' }));
+  wrap.appendChild(el('button', {
+    cls: 'graph-fit-btn', type: 'button', text: 'Fit',
+    title: 'Reset zoom and recenter',
+    on: { click: () => { resetGraphView(); onChange(); } },
+  }));
+  return wrap;
+}
+
+function dirToggleBar(onChange) {
+  const dirs = topLevelDirs();
+  const wrap = el('div', { cls: 'graph-dir-toggles' });
+  if (!dirs.length) return wrap;
+  wrap.appendChild(el('span', { cls: 'graph-dir-toggle-label', text: 'Folders:' }));
+  for (const d of dirs) {
+    const collapsed = STATE.collapsedGraphDirs.has(d.name);
+    wrap.appendChild(el('button', {
+      cls: `graph-dir-chip${collapsed ? ' collapsed' : ''}`,
+      type: 'button',
+      title: collapsed ? `Expand ${d.name}/` : `Collapse ${d.name}/ into one node`,
+      text: `${collapsed ? '▸' : '▾'} ${d.name}/ · ${d.count}`,
+      on: { click: () => { toggleGraphDir(d.name); onChange(); } },
+    }));
+  }
+  return wrap;
+}
+
+function topLevelDirs() {
+  const m = new Map();
+  for (const f of STATE.files) {
+    const d = topDir(f.path);
+    if (!d) continue;
+    m.set(d, (m.get(d) || 0) + 1);
+  }
+  return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([name, count]) => ({ name, count }));
+}
+
+function topDir(p) {
+  const i = p.indexOf('/');
+  return i < 0 ? '' : p.slice(0, i);
+}
+
+function legendSwatch(color, label) {
+  const w = el('span', { cls: 'graph-legend-swatch-row' });
+  w.appendChild(el('span', { cls: 'graph-legend-swatch', style: { background: color } }));
+  w.appendChild(el('span', { cls: 'graph-legend-label', text: label }));
+  return w;
+}
+
+function countImportEdges() {
+  let n = 0;
+  for (const [, set] of STATE.fileImports) n += set.size;
+  return n;
 }
 
 function currentRoot() {
@@ -41,214 +98,344 @@ function currentRoot() {
   return STATE.files[0]?.path || null;
 }
 
-function buildFileTree(rootPath) {
-  const visited = new Set();
-  function expand(path, depth) {
-    const file = STATE.byPath.get(path);
-    const node = {
-      path, file,
-      children: [], cycle: false, extCount: 0, extNames: [],
-      reach: 1, depth: 0,
-    };
-    if (visited.has(path)) { node.cycle = true; return node; }
-    visited.add(path);
-    if (depth >= MAX_DEPTH) return node;
+function graphCanvas(focusPath, onChange) {
+  const host = el('div', { cls: 'graph-host' });
+  const files = STATE.files;
+  if (!files.length) return host;
 
-    const imports = STATE.fileImports.get(path);
-    if (!imports || !imports.size) {
-      // surface unresolved external libs as collapsed leaves
-      const ext = (file?.imports || []).map(i => i.lib);
-      node.extCount = ext.length;
-      node.extNames = ext.slice(0, 6);
-      return node;
+  const collapsed = STATE.collapsedGraphDirs || new Set();
+  const clusterIdFor = p => {
+    const d = topDir(p);
+    return d && collapsed.has(d) ? `__dir__:${d}` : p;
+  };
+
+  // Build cluster nodes — each is either a single file or a collapsed-dir
+  // super-node aggregating all files under that top-level folder.
+  const nodes = new Map();
+  for (const f of files) {
+    const id = clusterIdFor(f.path);
+    if (id.startsWith('__dir__:')) {
+      let n = nodes.get(id);
+      if (!n) {
+        nodes.set(id, n = { id, kind: 'dir', dir: id.slice(8), files: [], lineCount: 0, langColor: f.langColor });
+      }
+      n.files.push(f);
+      n.lineCount += f.lineCount || 0;
+    } else {
+      nodes.set(id, { id, kind: 'file', file: f, files: [f], lineCount: f.lineCount, langColor: f.langColor });
     }
-    const sorted = [...imports].sort();
-    for (const childPath of sorted) {
-      const child = expand(childPath, depth + 1);
-      node.children.push(child);
-      node.reach += child.reach;
-      node.depth = Math.max(node.depth, 1 + child.depth);
-    }
-    const ext = (file?.imports || []).map(i => i.lib);
-    if (ext.length) {
-      node.extCount = ext.length;
-      node.extNames = ext.slice(0, 6);
-    }
-    return node;
   }
-  return expand(rootPath, 0);
-}
 
-function graphHost(tree, onChange) {
-  const host = el('div', { cls: 'graph-host file-trace-host' });
-  if (!tree) return host;
-  const { items, edges } = layout(tree);
-  const cols = items.reduce((m, n) => Math.max(m, n.col), 0) + 1;
-  const rows = items.reduce((m, n) => Math.max(m, n.row), 0) + 1;
-  const w = cols * COL_W + PAD * 2;
-  const h = rows * ROW_H + PAD * 2;
+  // Edges between cluster IDs (intra-cluster edges hidden).
+  const outgoing = new Map();
+  const incoming = new Map();
+  for (const id of nodes.keys()) { outgoing.set(id, new Set()); incoming.set(id, new Set()); }
+  for (const [from, set] of STATE.fileImports) {
+    const fId = clusterIdFor(from);
+    if (!nodes.has(fId)) continue;
+    for (const to of set) {
+      const tId = clusterIdFor(to);
+      if (!nodes.has(tId) || fId === tId) continue;
+      outgoing.get(fId).add(tId);
+      incoming.get(tId).add(fId);
+    }
+  }
+
+  // Pull files with no edges into their own "isolated" row so they don't
+  // crowd the entry-point layer.
+  const orderedIds = [...nodes.keys()].sort();
+  const wiredIds = [];
+  const isolatedIds = [];
+  for (const id of orderedIds) {
+    if (outgoing.get(id).size === 0 && incoming.get(id).size === 0) isolatedIds.push(id);
+    else wiredIds.push(id);
+  }
+
+  const layers = computeLayers(wiredIds, outgoing, incoming);
+  const buckets = [];
+  for (const id of wiredIds) {
+    const L = layers.get(id) || 0;
+    if (!buckets[L]) buckets[L] = [];
+    buckets[L].push(id);
+  }
+  for (const b of buckets) if (b) b.sort();
+  if (isolatedIds.length) buckets.push(isolatedIds.sort());
+
+  const numLayers = buckets.length || 1;
+  const widest = buckets.reduce((m, b) => Math.max(m, b ? b.length : 0), 1);
+  const W = Math.max(900, widest * 160);
+  const H = Math.max(560, numLayers * 150);
+  const padX = 80, padY = 70;
+  const innerW = W - padX * 2;
+  const innerH = H - padY * 2;
+
+  const positions = new Map();
+  buckets.forEach((bucket, L) => {
+    if (!bucket) return;
+    const rowY = numLayers === 1 ? H / 2 : padY + (L / (numLayers - 1)) * innerH;
+    bucket.forEach((id, i) => {
+      const colX = bucket.length === 1
+        ? W / 2
+        : padX + (i / (bucket.length - 1)) * innerW;
+      const node = nodes.get(id);
+      const r = node.kind === 'dir'
+        ? 16 + Math.sqrt(node.lineCount / 25)
+        : 6 + Math.sqrt((node.lineCount || 0) / 18);
+      positions.set(id, { x: colX, y: rowY, r, node });
+    });
+  });
+
+  const focusId = focusPath ? clusterIdFor(focusPath) : null;
+  const focusOut = focusId ? (outgoing.get(focusId) || new Set()) : null;
+  const focusIn = focusId ? (incoming.get(focusId) || new Set()) : null;
+  const focused = focusId ? new Set([focusId, ...(focusOut || []), ...(focusIn || [])]) : null;
 
   const svg = document.createElementNS(SVG_NS, 'svg');
-  svg.setAttribute('class', 'trace-svg');
-  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
-  svg.setAttribute('preserveAspectRatio', 'xMinYMin meet');
-  svg.style.width = `${w}px`;
-  svg.style.height = `${h}px`;
+  svg.setAttribute('class', 'graph-svg');
+  const initView = STATE.graphView || { x: 0, y: 0, w: W, h: H };
+  svg.setAttribute('viewBox', `${initView.x} ${initView.y} ${initView.w} ${initView.h}`);
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  svg.style.width = '100%';
+  svg.style.height = '100%';
+  svg.style.cursor = 'grab';
 
   const defs = document.createElementNS(SVG_NS, 'defs');
-  const m = document.createElementNS(SVG_NS, 'marker');
-  m.setAttribute('id', 'farrow');
-  m.setAttribute('viewBox', '0 0 10 10');
-  m.setAttribute('refX', '10'); m.setAttribute('refY', '5');
-  m.setAttribute('markerWidth', '7'); m.setAttribute('markerHeight', '7');
-  m.setAttribute('orient', 'auto-start-reverse');
-  const p = document.createElementNS(SVG_NS, 'path');
-  p.setAttribute('d', 'M0,0 L10,5 L0,10 z');
-  p.setAttribute('class', 'trace-svg-arrow conf-high');
-  m.appendChild(p);
-  defs.appendChild(m);
+  defs.appendChild(arrowMarker('garrow-out', 'var(--accent)'));
+  defs.appendChild(arrowMarker('garrow-in', 'var(--success)'));
+  defs.appendChild(arrowMarker('garrow-dim', 'rgba(120,118,111,0.35)'));
   svg.appendChild(defs);
 
+  // Edges
   const eg = document.createElementNS(SVG_NS, 'g');
-  for (const e of edges) {
-    const a = items[e.from], b = items[e.to];
-    const x1 = a.x + NODE_W;
-    const y1 = a.y + NODE_H / 2;
-    const x2 = b.x;
-    const y2 = b.y + NODE_H / 2;
-    const cx = (x1 + x2) / 2;
-    const path = document.createElementNS(SVG_NS, 'path');
-    path.setAttribute('d', `M${x1},${y1} C${cx},${y1} ${cx},${y2} ${x2},${y2}`);
-    path.setAttribute('class', 'trace-svg-edge conf-high');
-    path.setAttribute('marker-end', 'url(#farrow)');
-    eg.appendChild(path);
+  eg.setAttribute('class', 'graph-edges');
+  for (const [from, set] of outgoing) {
+    const a = positions.get(from);
+    if (!a) continue;
+    for (const to of set) {
+      const b = positions.get(to);
+      if (!b) continue;
+      const isOut = focusId && from === focusId;
+      const isIn = focusId && to === focusId;
+      const dim = focusId && !isOut && !isIn;
+      const cls = isOut ? 'edge-out' : isIn ? 'edge-in' : (dim ? 'edge-dim' : 'edge-base');
+      const marker = isOut ? 'url(#garrow-out)' : isIn ? 'url(#garrow-in)' : 'url(#garrow-dim)';
+      const path = document.createElementNS(SVG_NS, 'path');
+      const dy = b.y - a.y;
+      const handle = Math.max(40, Math.abs(dy) * 0.5);
+      path.setAttribute('d', `M${a.x},${a.y} C${a.x},${a.y + handle} ${b.x},${b.y - handle} ${b.x},${b.y}`);
+      path.setAttribute('class', `graph-edge ${cls}`);
+      path.setAttribute('marker-end', marker);
+      eg.appendChild(path);
+    }
   }
   svg.appendChild(eg);
 
+  // Nodes
   const ng = document.createElementNS(SVG_NS, 'g');
-  const focusPath = currentRoot();
-  for (const n of items) {
+  ng.setAttribute('class', 'graph-nodes');
+  for (const [id, pos] of positions) {
+    const node = pos.node;
+    const dimmed = focused && !focused.has(id);
+    const isFocus = id === focusId;
     const g = document.createElementNS(SVG_NS, 'g');
-    g.setAttribute('transform', `translate(${n.x},${n.y})`);
-    const cls = ['trace-svg-node', 'file-node'];
-    if (n.cycle) cls.push('cycle');
-    if (n.path === focusPath) cls.push('active');
-    g.setAttribute('class', cls.join(' '));
+    g.setAttribute('transform', `translate(${pos.x},${pos.y})`);
+    g.setAttribute('class', `graph-node graph-node-${node.kind}${isFocus ? ' focus' : ''}${dimmed ? ' dim' : ''}`);
     g.style.cursor = 'pointer';
 
-    const rect = document.createElementNS(SVG_NS, 'rect');
-    rect.setAttribute('width', String(NODE_W));
-    rect.setAttribute('height', String(NODE_H));
-    rect.setAttribute('rx', '6');
-    if (n.file?.langColor) {
-      rect.setAttribute('fill', alpha(n.file.langColor, '22'));
-      rect.setAttribute('stroke', n.file.langColor);
+    if (node.kind === 'dir') {
+      const w = Math.max(120, pos.r * 6), h = Math.max(48, pos.r * 2.6);
+      const rect = document.createElementNS(SVG_NS, 'rect');
+      rect.setAttribute('x', String(-w / 2)); rect.setAttribute('y', String(-h / 2));
+      rect.setAttribute('width', String(w)); rect.setAttribute('height', String(h));
+      rect.setAttribute('rx', '8');
+      rect.setAttribute('fill', alpha(node.langColor || '#888', '33'));
+      rect.setAttribute('stroke', isFocus ? 'var(--accent)' : (node.langColor || '#888'));
+      rect.setAttribute('stroke-width', isFocus ? '2.5' : '1.5');
+      rect.setAttribute('stroke-dasharray', '4,3');
+      g.appendChild(rect);
+      const label = document.createElementNS(SVG_NS, 'text');
+      label.setAttribute('class', 'graph-node-label graph-dir-label');
+      label.setAttribute('x', '0'); label.setAttribute('y', '-2');
+      label.setAttribute('text-anchor', 'middle');
+      label.textContent = `▸ ${node.dir}/`;
+      g.appendChild(label);
+      const sub = document.createElementNS(SVG_NS, 'text');
+      sub.setAttribute('class', 'graph-node-sublabel');
+      sub.setAttribute('x', '0'); sub.setAttribute('y', '14');
+      sub.setAttribute('text-anchor', 'middle');
+      sub.textContent = `${node.files.length} files · click to expand`;
+      g.appendChild(sub);
+      const title = document.createElementNS(SVG_NS, 'title');
+      title.textContent = `${node.dir}/ (collapsed)\n${node.files.length} files · ${node.lineCount} lines\nimports ${outgoing.get(id).size} · imported by ${incoming.get(id).size}`;
+      g.appendChild(title);
+      g.addEventListener('click', (e) => { e.stopPropagation(); toggleGraphDir(node.dir); onChange(); });
+    } else {
+      const f = node.file;
+      const circle = document.createElementNS(SVG_NS, 'circle');
+      circle.setAttribute('r', String(pos.r));
+      circle.setAttribute('fill', f.langColor ? alpha(f.langColor, 'cc') : '#888');
+      circle.setAttribute('stroke', isFocus ? 'var(--accent)' : (f.langColor || '#888'));
+      circle.setAttribute('stroke-width', isFocus ? '2.5' : '1');
+      g.appendChild(circle);
+      const showLabel = isFocus || (focused && focused.has(id)) || pos.r > 8 || nodes.size <= 60;
+      if (showLabel) {
+        const label = document.createElementNS(SVG_NS, 'text');
+        label.setAttribute('class', 'graph-node-label');
+        label.setAttribute('x', '0');
+        label.setAttribute('y', String(pos.r + 12));
+        label.setAttribute('text-anchor', 'middle');
+        label.textContent = truncate(basename(f.path), 22);
+        g.appendChild(label);
+      }
+      const title = document.createElementNS(SVG_NS, 'title');
+      const outN = outgoing.get(id).size, inN = incoming.get(id).size;
+      title.textContent = `${f.path}\n${f.lang} · ${f.lineCount} lines · ${f.fns.length} fns\nimports ${outN} · imported by ${inN}\nclick: focus · double-click: open in trace`;
+      g.appendChild(title);
+      g.addEventListener('click', (e) => { e.stopPropagation(); selectPath(f.path); setFileTraceRoot(f.path); onChange(); });
+      g.addEventListener('dblclick', (e) => { e.stopPropagation(); setFileTraceRoot(f.path); selectPath(f.path); onChange(); });
     }
-    g.appendChild(rect);
-
-    const dirLbl = document.createElementNS(SVG_NS, 'text');
-    dirLbl.setAttribute('class', 'trace-svg-file');
-    dirLbl.setAttribute('x', '10');
-    dirLbl.setAttribute('y', '14');
-    dirLbl.textContent = truncate(dirOf(n.path), 30);
-    g.appendChild(dirLbl);
-
-    const name = document.createElementNS(SVG_NS, 'text');
-    name.setAttribute('class', 'trace-svg-name');
-    name.setAttribute('x', '10');
-    name.setAttribute('y', '30');
-    name.textContent = truncate(basename(n.path), 28);
-    g.appendChild(name);
-
-    const meta = document.createElementNS(SVG_NS, 'text');
-    meta.setAttribute('class', 'trace-svg-meta');
-    meta.setAttribute('x', '10');
-    meta.setAttribute('y', '42');
-    const parts = [];
-    if (n.file) parts.push(`${n.file.lineCount}L`);
-    if (n.file) parts.push(`${n.file.fns.length} fn`);
-    if (n.extCount) parts.push(`+${n.extCount} ext`);
-    if (n.cycle) parts.push('cycle');
-    meta.textContent = parts.join(' · ');
-    g.appendChild(meta);
-
-    const title = document.createElementNS(SVG_NS, 'title');
-    title.textContent =
-      `${n.path}\n` +
-      (n.file ? `${n.file.lang} · ${n.file.lineCount} lines · ${n.file.fns.length} functions\n` : '') +
-      (n.extCount ? `external imports (${n.extCount}): ${n.extNames.join(', ')}${n.extCount > n.extNames.length ? ', …' : ''}\n` : '') +
-      `click: select · double-click: re-root trace`;
-    g.appendChild(title);
-
-    g.addEventListener('click', () => { selectPath(n.path); onChange(); });
-    g.addEventListener('dblclick', () => { setFileTraceRoot(n.path); selectPath(n.path); onChange(); });
     ng.appendChild(g);
   }
   svg.appendChild(ng);
+
+  attachPanZoom(svg, W, H);
+
   host.appendChild(svg);
   return host;
 }
 
-function layout(tree) {
-  const items = [];
-  const edges = [];
-  const queue = [{ node: tree, col: 0, parentIdx: -1 }];
-  const rowsAtCol = new Map();
+function attachPanZoom(svg, W, H) {
+  const getView = () => {
+    const v = svg.viewBox.baseVal;
+    return { x: v.x, y: v.y, w: v.width, h: v.height };
+  };
+  const setView = (v) => {
+    svg.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`);
+    STATE.graphView = v;
+  };
+  const minW = W * 0.05, maxW = W * 6;
+  const minH = H * 0.05, maxH = H * 6;
+
+  svg.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const view = getView();
+    const rect = svg.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width;
+    const py = (e.clientY - rect.top) / rect.height;
+    const cx = view.x + px * view.w;
+    const cy = view.y + py * view.h;
+    const factor = Math.exp(e.deltaY * 0.0015);
+    const nw = Math.max(minW, Math.min(maxW, view.w * factor));
+    const nh = Math.max(minH, Math.min(maxH, view.h * factor));
+    setView({ x: cx - px * nw, y: cy - py * nh, w: nw, h: nh });
+  }, { passive: false });
+
+  let dragging = null;
+  svg.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.graph-node')) return;
+    dragging = { x: e.clientX, y: e.clientY, view: getView() };
+    svg.setPointerCapture(e.pointerId);
+    svg.style.cursor = 'grabbing';
+  });
+  svg.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const rect = svg.getBoundingClientRect();
+    const dx = (e.clientX - dragging.x) / rect.width * dragging.view.w;
+    const dy = (e.clientY - dragging.y) / rect.height * dragging.view.h;
+    setView({ x: dragging.view.x - dx, y: dragging.view.y - dy, w: dragging.view.w, h: dragging.view.h });
+  });
+  const endDrag = (e) => {
+    if (!dragging) return;
+    dragging = null;
+    try { svg.releasePointerCapture(e.pointerId); } catch (_) {}
+    svg.style.cursor = 'grab';
+  };
+  svg.addEventListener('pointerup', endDrag);
+  svg.addEventListener('pointercancel', endDrag);
+}
+
+function computeLayers(ids, outgoing, incoming) {
+  // Kahn's algorithm. A node's layer = max layer of any node that points to
+  // it, plus one. Nodes with no incoming edges (entry points) sit at layer 0;
+  // their dependencies cascade downward. Cycle nodes never reach in-degree 0,
+  // so we park them in an overflow layer below the deepest resolved node.
+  const layer = new Map();
+  const remaining = new Map();
+  for (const id of ids) remaining.set(id, (incoming.get(id) || new Set()).size);
+  const queue = [];
+  for (const id of ids) if (remaining.get(id) === 0) { layer.set(id, 0); queue.push(id); }
   while (queue.length) {
-    const { node, col, parentIdx } = queue.shift();
-    const row = rowsAtCol.get(col) || 0;
-    rowsAtCol.set(col, row + 1);
-    const idx = items.length;
-    items.push({
-      path: node.path,
-      file: node.file,
-      col, row,
-      x: PAD + col * COL_W,
-      y: PAD + row * ROW_H,
-      extCount: node.extCount || 0,
-      extNames: node.extNames || [],
-      cycle: !!node.cycle,
-    });
-    if (parentIdx >= 0) edges.push({ from: parentIdx, to: idx });
-    for (const child of node.children) queue.push({ node: child, col: col + 1, parentIdx: idx });
+    const u = queue.shift();
+    const uL = layer.get(u);
+    for (const v of outgoing.get(u) || []) {
+      const candidate = uL + 1;
+      if (candidate > (layer.get(v) ?? -1)) layer.set(v, candidate);
+      remaining.set(v, remaining.get(v) - 1);
+      if (remaining.get(v) === 0) queue.push(v);
+    }
   }
-  return { items, edges };
+  let maxL = 0;
+  for (const l of layer.values()) if (l > maxL) maxL = l;
+  for (const id of ids) if (!layer.has(id)) layer.set(id, maxL + 1);
+  return layer;
+}
+
+function arrowMarker(id, color) {
+  const m = document.createElementNS(SVG_NS, 'marker');
+  m.setAttribute('id', id);
+  m.setAttribute('viewBox', '0 0 10 10');
+  m.setAttribute('refX', '9'); m.setAttribute('refY', '5');
+  m.setAttribute('markerWidth', '6'); m.setAttribute('markerHeight', '6');
+  m.setAttribute('orient', 'auto-start-reverse');
+  const p = document.createElementNS(SVG_NS, 'path');
+  p.setAttribute('d', 'M0,0 L10,5 L0,10 z');
+  p.setAttribute('fill', color);
+  m.appendChild(p);
+  return m;
 }
 
 function infoPane(focusFile, onChange) {
   const info = el('aside', { cls: 'graph-info' });
+  if (!focusFile) {
+    info.appendChild(el('div', { cls: 'graph-info-empty', text: 'Click a node to see its imports.' }));
+    return info;
+  }
   info.appendChild(el('div', { cls: 'graph-info-title', text: basename(focusFile.path) }));
   info.appendChild(el('div', { cls: 'graph-info-sub', text: focusFile.path }));
 
+  const importsOut = [...(STATE.fileImports.get(focusFile.path) || new Set())].sort();
   const importers = [...(STATE.fileImporters.get(focusFile.path) || new Set())].sort();
+
   const sec1 = el('div', { cls: 'graph-info-sec' });
-  sec1.appendChild(el('div', { cls: 'graph-info-sec-title', text: `Imported by (${importers.length})` }));
-  if (!importers.length) {
-    sec1.appendChild(el('div', { cls: 'graph-info-empty-sm', text: 'no in-codebase importers' }));
-  } else {
-    for (const p of importers) sec1.appendChild(connRow(p, onChange));
-  }
+  sec1.appendChild(el('div', { cls: 'graph-info-sec-title', text: `Imports (${importsOut.length}) →` }));
+  if (!importsOut.length) sec1.appendChild(el('div', { cls: 'graph-info-empty-sm', text: 'no in-codebase imports' }));
+  else for (const p of importsOut) sec1.appendChild(connRow(p, 'out', onChange));
   info.appendChild(sec1);
 
-  const exts = focusFile.imports || [];
   const sec2 = el('div', { cls: 'graph-info-sec' });
-  sec2.appendChild(el('div', { cls: 'graph-info-sec-title', text: `External imports (${exts.length})` }));
-  if (!exts.length) {
-    sec2.appendChild(el('div', { cls: 'graph-info-empty-sm', text: 'none' }));
-  } else {
+  sec2.appendChild(el('div', { cls: 'graph-info-sec-title', text: `← Imported by (${importers.length})` }));
+  if (!importers.length) sec2.appendChild(el('div', { cls: 'graph-info-empty-sm', text: 'no in-codebase importers' }));
+  else for (const p of importers) sec2.appendChild(connRow(p, 'in', onChange));
+  info.appendChild(sec2);
+
+  const exts = focusFile.imports || [];
+  const sec3 = el('div', { cls: 'graph-info-sec' });
+  sec3.appendChild(el('div', { cls: 'graph-info-sec-title', text: `External libs (${exts.length})` }));
+  if (!exts.length) sec3.appendChild(el('div', { cls: 'graph-info-empty-sm', text: 'none' }));
+  else {
     const row = el('div', { cls: 'trace-pill-row' });
     for (const im of exts) row.appendChild(el('span', { cls: 'pill', text: im.lib }));
-    sec2.appendChild(row);
+    sec3.appendChild(row);
   }
-  info.appendChild(sec2);
+  info.appendChild(sec3);
 
   return info;
 }
 
-function connRow(otherPath, onChange) {
+function connRow(otherPath, dir, onChange) {
   const row = el('button', {
-    cls: 'graph-conn', type: 'button',
-    title: otherPath + '\nclick: re-root trace on this file',
+    cls: `graph-conn graph-conn-${dir}`, type: 'button',
+    title: otherPath + '\nclick: focus this file',
     on: { click: () => { setFileTraceRoot(otherPath); selectPath(otherPath); onChange(); } },
   });
   row.appendChild(el('span', { cls: 'graph-conn-name', text: basename(otherPath) }));
@@ -292,13 +479,6 @@ function breadcrumbs(onChange) {
   return strip;
 }
 
-function hint(focusFile, tree) {
-  const reach = tree.reach;
-  const depth = tree.depth;
-  const text = `${focusFile.path} imports ${reach - 1} file${reach - 1 === 1 ? '' : 's'} transitively, max chain depth ${depth}.`;
-  return el('div', { cls: 'view-hint', text });
-}
-
 function dirOf(path) {
   const i = path.lastIndexOf('/');
   return i < 0 ? '' : path.slice(0, i);
@@ -314,12 +494,5 @@ function splash() {
     el('div', { cls: 'splash-icon', text: '🕸️' }),
     el('div', { cls: 'splash-title', text: 'No graph yet' }),
     el('div', { cls: 'splash-sub', text: 'Drop a folder to see how files import each other.' }),
-  ]);
-}
-
-function pickPrompt() {
-  return el('div', { cls: 'upload-splash' }, [
-    el('div', { cls: 'splash-title', text: 'Pick a file' }),
-    el('div', { cls: 'splash-sub', text: 'Click a file in the sidebar to trace its file-level dependencies.' }),
   ]);
 }

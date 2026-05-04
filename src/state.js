@@ -34,6 +34,10 @@ export const STATE = {
   skipped: newSkipped(),
   expandedDirs: new Set(),
   expandedFns: new Set(),
+  expandedWalkSteps: new Set(),
+  expandedTraceSource: true,
+  collapsedGraphDirs: new Set(),
+  graphView: null,
   fileImports: new Map(),
   fileImporters: new Map(),
   fileTraceRoot: null,
@@ -66,6 +70,9 @@ export function setFiles(files, analysis = EMPTY_ANALYSIS) {
   STATE.walkIdx = 0;
   STATE.expandedDirs = defaultExpandedDirs(files);
   STATE.expandedFns = new Set();
+  STATE.expandedWalkSteps = new Set();
+  STATE.collapsedGraphDirs = new Set();
+  STATE.graphView = null;
   const firstFile = files[0] || null;
   STATE.selectedPath = firstFile ? firstFile.path : null;
   STATE.fileTraceRoot = firstFile ? firstFile.path : null;
@@ -111,6 +118,32 @@ export function toggleFnExpanded(key) {
   else STATE.expandedFns.add(key);
 }
 
+export function toggleWalkStep(idx) {
+  if (STATE.expandedWalkSteps.has(idx)) STATE.expandedWalkSteps.delete(idx);
+  else STATE.expandedWalkSteps.add(idx);
+}
+
+export function setAllWalkStepsExpanded(expanded) {
+  if (expanded) {
+    STATE.expandedWalkSteps = new Set(STATE.walk.map((_, i) => i));
+  } else {
+    STATE.expandedWalkSteps = new Set();
+  }
+}
+
+export function toggleTraceSource() {
+  STATE.expandedTraceSource = !STATE.expandedTraceSource;
+}
+
+export function toggleGraphDir(dir) {
+  if (STATE.collapsedGraphDirs.has(dir)) STATE.collapsedGraphDirs.delete(dir);
+  else STATE.collapsedGraphDirs.add(dir);
+  STATE.graphView = null;
+}
+
+export function setGraphView(v) { STATE.graphView = v; }
+export function resetGraphView() { STATE.graphView = null; }
+
 export function setFileTraceRoot(path) {
   if (!path) return;
   if (STATE.fileTraceRoot === path) return;
@@ -129,14 +162,12 @@ export function gotoFileTraceHistory(idx) {
 }
 
 function defaultExpandedDirs(files) {
+  // Only top-level directories are expanded by default — deeper folders stay
+  // collapsed so the sidebar reads as an outline rather than a wall of files.
   const dirs = new Set();
   for (const f of files) {
     const parts = f.path.split('/');
-    let acc = '';
-    for (let i = 0; i < parts.length - 1; i++) {
-      acc = acc ? `${acc}/${parts[i]}` : parts[i];
-      dirs.add(acc);
-    }
+    if (parts.length > 1) dirs.add(parts[0]);
   }
   return dirs;
 }

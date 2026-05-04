@@ -100,10 +100,14 @@ function extractImports(src, cfg, path) {
 }
 
 function extractLocalImports(src, cfg) {
+  // Keep every raw import spec — analyzer decides if it resolves to a file in
+  // the repo. This way Python's `from pkg.mod import X` (no leading dot) still
+  // gets a chance to resolve as a local file edge.
   const out = []; const seen = new Set();
   forEachMatch(src, cfg.imports, raw => {
     raw = raw.trim();
-    if (!raw.startsWith('.') && !raw.startsWith('/')) return;
+    if (!raw) return;
+    if (/^https?:\/\//i.test(raw) || raw.startsWith('//')) return;
     if (seen.has(raw)) return;
     seen.add(raw);
     out.push(raw);

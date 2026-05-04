@@ -135,15 +135,28 @@ function buildCallGraph(files) {
 
 function resolveLocalImport(importerPath, spec, byPath) {
   const dir = importerPath.includes('/') ? importerPath.slice(0, importerPath.lastIndexOf('/')) : '';
-  const joined = normPath(dir ? dir + '/' + spec : spec);
-  if (byPath.has(joined)) return joined;
-  for (const ext of RESOLVE_EXTS) {
-    const p1 = `${joined}.${ext}`;
-    if (byPath.has(p1)) return p1;
+  const candidates = [];
+  if (spec.startsWith('.') || spec.startsWith('/')) {
+    candidates.push(normPath(dir ? dir + '/' + spec : spec));
+  } else {
+    // Package-style dotted spec (Python "pkg.mod", Java "com.foo.Bar"). Try as
+    // a path from the repo root, and also relative to the importer's dir.
+    const dotted = spec.replace(/\./g, '/');
+    candidates.push(dotted);
+    if (dir) candidates.push(normPath(dir + '/' + dotted));
   }
-  for (const ext of RESOLVE_EXTS) {
-    const p2 = `${joined}/index.${ext}`;
-    if (byPath.has(p2)) return p2;
+  for (const joined of candidates) {
+    if (!joined) continue;
+    if (byPath.has(joined)) return joined;
+    for (const ext of RESOLVE_EXTS) {
+      const p1 = `${joined}.${ext}`;
+      if (byPath.has(p1)) return p1;
+    }
+    for (const ext of RESOLVE_EXTS) {
+      const p2 = `${joined}/index.${ext}`;
+      if (byPath.has(p2)) return p2;
+    }
+    if (byPath.has(`${joined}/__init__.py`)) return `${joined}/__init__.py`;
   }
   return null;
 }
