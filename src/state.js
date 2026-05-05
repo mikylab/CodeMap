@@ -37,6 +37,7 @@ export const STATE = {
   expandedDirs: new Set(),
   expandedFns: new Set(),
   expandedWalkSteps: new Set(),
+  walkRevealed: new Set(),
   expandedTraceSource: true,
   collapsedGraphDirs: new Set(),
   graphView: null,
@@ -96,6 +97,7 @@ export function setFiles(files, analysis = EMPTY_ANALYSIS) {
   STATE.expandedDirs = defaultExpandedDirs(files);
   STATE.expandedFns = new Set();
   STATE.expandedWalkSteps = new Set();
+  STATE.walkRevealed = new Set();
   STATE.collapsedGraphDirs = defaultCollapsedGraphDirs(files);
   STATE.graphView = null;
   const firstFile = files[0] || null;
@@ -148,8 +150,8 @@ export function toggleFnExpanded(key) {
 }
 
 export function toggleWalkStep(idx) {
-  if (STATE.expandedWalkSteps.has(idx)) STATE.expandedWalkSteps.delete(idx);
-  else STATE.expandedWalkSteps.add(idx);
+  const open = STATE.expandedWalkSteps.has(idx);
+  STATE.expandedWalkSteps = open ? new Set() : new Set([idx]);
 }
 
 export function setAllWalkStepsExpanded(expanded) {

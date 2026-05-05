@@ -54,12 +54,19 @@ export const EFFECT_LIBS = {
     java: ['java.io', 'java.nio'],
   },
   db: {
-    js:   ['pg', 'mysql', 'mysql2', 'sqlite3', 'better-sqlite3', 'mongodb', 'mongoose', 'redis', 'ioredis', 'prisma', 'typeorm', 'knex', 'drizzle-orm', 'sequelize'],
-    py:   ['psycopg2', 'sqlalchemy', 'pymongo', 'redis', 'sqlite3', 'mysql'],
-    go:   ['database/sql', 'gorm.io'],
-    rs:   ['sqlx', 'diesel'],
-    rb:   ['pg', 'mysql2', 'redis', 'active_record', 'sequel'],
-    java: ['java.sql', 'jakarta.persistence', 'javax.persistence'],
+    js:   ['pg', 'pg-promise', 'mysql', 'mysql2', 'sqlite3', 'better-sqlite3',
+           'mongodb', 'mongoose', 'redis', 'ioredis',
+           'prisma', '@prisma/client', 'typeorm', 'knex', 'drizzle-orm', 'sequelize',
+           '@supabase/supabase-js', 'firebase', 'firebase-admin', '@firebase/firestore',
+           'cassandra-driver', 'mssql', 'tedious', 'oracledb', '@neondatabase/serverless',
+           '@planetscale/database', 'kysely', 'dexie'],
+    py:   ['psycopg2', 'psycopg', 'asyncpg', 'sqlalchemy', 'pymongo', 'motor',
+           'redis', 'sqlite3', 'mysql', 'pymysql', 'aiomysql', 'aiosqlite',
+           'cassandra', 'tortoise', 'peewee', 'mongoengine', 'supabase', 'firebase_admin'],
+    go:   ['database/sql', 'gorm.io', 'go.mongodb.org'],
+    rs:   ['sqlx', 'diesel', 'sea-orm', 'mongodb', 'redis'],
+    rb:   ['pg', 'mysql2', 'redis', 'active_record', 'sequel', 'mongo'],
+    java: ['java.sql', 'jakarta.persistence', 'javax.persistence', 'org.hibernate', 'org.springframework.data'],
   },
   exec: {
     js:   ['child_process', 'execa'],
@@ -116,7 +123,21 @@ export const EFFECT_PATTERNS = {
     /\bexec\s*\(/,
   ],
   db: [
-    /\.query\s*\(\s*['"`](?:select|insert|update|delete|create)\b/i,
+    // SQL strings — execute/query/raw with a leading SQL keyword
+    /\b(?:query|execute|exec|raw|prepare)\s*\(\s*['"`](?:\s|--|\/\*)*(?:select|insert|update|delete|create|alter|drop|truncate|with|merge|begin|commit|rollback)\b/i,
+    // Connection strings
+    /['"`](?:mongodb(?:\+srv)?|postgres(?:ql)?|mysql|mariadb|redis|rediss|cassandra|sqlserver|oracle):\/\//i,
+    // MongoDB / Mongoose API
+    /\.(?:collection|aggregate|insertOne|insertMany|findOne|findOneAnd\w+|deleteOne|deleteMany|updateOne|updateMany|replaceOne|countDocuments|estimatedDocumentCount|bulkWrite|createIndex)\s*\(/,
+    // Prisma / Drizzle / Kysely / TypeORM
+    /\.(?:findUnique|findFirst|findMany|upsert|createMany|updateMany|deleteMany)\s*\(/,
+    // Knex / SQL builder chains
+    /\b(?:knex|db|client|pool)\s*\(\s*['"`]\w+['"`]\s*\)\s*\.(?:select|insert|update|del|delete|where)\b/i,
+    // Redis-style commands
+    /\.(?:hset|hget|hgetall|sadd|smembers|zadd|zrange|lpush|rpush|expire|ttl)\s*\(/,
+    // Supabase / Firestore typical chains
+    /\.from\s*\(\s*['"`]\w+['"`]\s*\)\s*\.(?:select|insert|update|delete|upsert)\s*\(/,
+    /\.collection\s*\(\s*['"`][^'"`]+['"`]\s*\)\s*\.(?:doc|where|orderBy|add|set|get)\s*\(/,
   ],
 };
 
