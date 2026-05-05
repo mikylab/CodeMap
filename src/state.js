@@ -56,6 +56,11 @@ export const STATE = {
   fileTraceRoot: null,
   fileTraceHistory: [],
   fileTraceHistoryIdx: -1,
+  // workspace UI
+  selectedFnKey: null,            // when set, detail pane is in fn mode
+  detailMode: 'summary',          // sticky: summary | source | calls | risk | deps
+  fullscreen: null,               // null | 'walk' | 'graph' | 'smells'
+  navSearch: '',                  // search box in navigator
 };
 
 // `traceRoot` is derived from history rather than stored — single source of truth.
@@ -93,7 +98,11 @@ export function setFiles(files, analysis = EMPTY_ANALYSIS) {
   STATE.collapsedGraphDirs = defaultCollapsedGraphDirs(files);
   STATE.graphView = null;
   const firstFile = files[0] || null;
-  STATE.selectedPath = firstFile ? firstFile.path : null;
+  STATE.selectedPath = null;
+  STATE.selectedFnKey = null;
+  STATE.detailMode = 'summary';
+  STATE.fullscreen = null;
+  STATE.navSearch = '';
   STATE.fileTraceRoot = firstFile ? firstFile.path : null;
   STATE.fileTraceHistory = firstFile ? [firstFile.path] : [];
   STATE.fileTraceHistoryIdx = firstFile ? 0 : -1;
@@ -320,6 +329,27 @@ export function reversePaintDirection() {
 
 export function setActiveTab(name) { STATE.activeTab = name; }
 export function setSidebarFilter(s) { STATE.sidebarFilter = s; }
+
+// workspace mutators
+export function setDetailMode(m) { STATE.detailMode = m; }
+export function setFullscreen(name) { STATE.fullscreen = name || null; }
+export function exitFullscreen() { STATE.fullscreen = null; }
+export function setNavSearch(s) { STATE.navSearch = s || ''; }
+export function selectFile(path) {
+  STATE.selectedPath = path || null;
+  STATE.selectedFnKey = null;
+  if (path) expandAncestors(path);
+}
+export function selectFn(fn) {
+  if (!fn) { STATE.selectedFnKey = null; return; }
+  STATE.selectedPath = fn.file;
+  STATE.selectedFnKey = fnKey(fn);
+  expandAncestors(fn.file);
+}
+export function clearSelection() {
+  STATE.selectedPath = null;
+  STATE.selectedFnKey = null;
+}
 export function setFunctionsSort(s) { STATE.functionsSort = s; }
 export function setSkipped(s) { STATE.skipped = s || newSkipped(); }
 

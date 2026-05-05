@@ -1,4 +1,4 @@
-import { STATE, selectPath, setTraceRoot, setActiveTab, setFileTraceRoot, toggleWalkStep, setAllWalkStepsExpanded } from '../state.js';
+import { STATE, selectFile, selectFn, exitFullscreen, toggleWalkStep, setAllWalkStepsExpanded } from '../state.js';
 import { STEP_COLORS } from '../tabs.js';
 import { el } from '../dom.js';
 
@@ -123,13 +123,12 @@ function chipBlock(title, items, color, makeChip) {
 function fileChip(path, onChange) {
   return el('button', {
     cls: 'walk-fn-chip walk-file-chip', type: 'button',
-    title: 'Open this file in Trace',
+    title: 'Open this file in the workspace',
     text: path,
     on: {
       click: () => {
-        selectPath(path);
-        setFileTraceRoot(path);
-        setActiveTab('trace');
+        selectFile(path);
+        exitFullscreen();
         onChange();
       },
     },
@@ -139,12 +138,13 @@ function fileChip(path, onChange) {
 function fnChip(name, onChange) {
   return el('button', {
     cls: 'walk-fn-chip', type: 'button', text: name,
+    title: 'Open this function in the workspace',
     on: {
       click: () => {
         const hit = findFn(name);
         if (!hit) return;
-        setTraceRoot(hit);
-        setActiveTab('trace');
+        selectFn(hit);
+        exitFullscreen();
         onChange();
       },
     },

@@ -9,23 +9,23 @@
   <div class="root">
     <div id="toolbar" class="toolbar"></div>
     <div class="layout">
-      <aside id="sidebar" class="sidebar"></aside>
+      <aside id="navigator" class="navigator"></aside>
       <main class="main">
         <div id="statbar" class="statbar"></div>
         <div id="warnbar" class="warnbar" hidden></div>
-        <div id="tab-content" class="tab-content"></div>
+        <div id="workspace" class="workspace"></div>
         <div id="drop-overlay" class="drop-overlay">
           <div class="drop-msg">Drop folder to parse</div>
         </div>
       </main>
     </div>
+    <div id="fullscreen" class="fullscreen" style="display:none"></div>
   </div>
   <input id="dir-picker" type="file" webkitdirectory multiple style="display:none" />
   <script type="module">
     import { ingestFromDrop, newSkipped, noteTooLarge, MAX_BYTES } from './src/ingest.js';
     import { parseFile } from './src/parser.js';
-    import { setFiles, setSkipped, setActiveTab, selectFileByOffset, STATE } from './src/state.js';
-    import { TABS } from './src/tabs.js';
+    import { setFiles, setSkipped, exitFullscreen, setFullscreen, STATE } from './src/state.js';
     import { analyze } from './src/analyzer.js';
     import { renderAll } from './src/renderer.js';
     import { mark, measure } from './src/perf.js';
@@ -88,17 +88,18 @@
       if (e.target.matches('input, textarea, select, [contenteditable]')) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
-      if (/^[1-6]$/.test(e.key)) {
-        const t = TABS[Number(e.key) - 1];
-        if (t && t.enabled) { e.preventDefault(); setActiveTab(t.id); renderAll(); }
+      // Esc — exit fullscreen
+      if (e.key === 'Escape' && STATE.fullscreen) {
+        e.preventDefault();
+        exitFullscreen();
+        renderAll();
         return;
       }
 
-      if (e.key === 'j' || e.key === 'k') {
-        e.preventDefault();
-        selectFileByOffset(e.key === 'j' ? 1 : -1);
-        renderAll();
-      }
+      // 1=Walk overlay, 2=Graph overlay, 3=Smells overlay, 0=workspace (close)
+      if (e.key === '1') { e.preventDefault(); setFullscreen(STATE.fullscreen === 'walk'   ? null : 'walk');   renderAll(); return; }
+      if (e.key === '2') { e.preventDefault(); setFullscreen(STATE.fullscreen === 'graph'  ? null : 'graph');  renderAll(); return; }
+      if (e.key === '3') { e.preventDefault(); setFullscreen(STATE.fullscreen === 'smells' ? null : 'smells'); renderAll(); return; }
     });
 
     renderAll();

@@ -1,4 +1,4 @@
-import { STATE, selectPath, setFileTraceRoot, gotoFileTraceHistory, toggleGraphDir, resetGraphView, zoomGraph, setGraphFilter, toggleGraphHideIsolated, clearGraphFocus, resetGraphCollapse, topClusterMap, setPaintEndpoint } from '../state.js';
+import { STATE, selectFile, gotoFileTraceHistory, toggleGraphDir, resetGraphView, zoomGraph, setGraphFilter, toggleGraphHideIsolated, clearGraphFocus, resetGraphCollapse, topClusterMap, setPaintEndpoint, exitFullscreen } from '../state.js';
 import { el, basename, alpha } from '../dom.js';
 import { renderPaintStrip, computePaint } from './paint-strip.js';
 
@@ -360,8 +360,8 @@ function graphCanvas(focusPath, onChange) {
       const outN = outgoing.get(id).size, inN = incoming.get(id).size;
       title.textContent = `${f.path}\n${f.lang} · ${f.lineCount} lines · ${f.fns.length} fns\nimports ${outN} · imported by ${inN}\nclick: focus · double-click: open in trace`;
       g.appendChild(title);
-      g.addEventListener('click', (e) => { e.stopPropagation(); selectPath(f.path); setFileTraceRoot(f.path); onChange(); });
-      g.addEventListener('dblclick', (e) => { e.stopPropagation(); setFileTraceRoot(f.path); selectPath(f.path); onChange(); });
+      g.addEventListener('click', (e) => { e.stopPropagation(); selectFile(f.path); onChange(); });
+      g.addEventListener('dblclick', (e) => { e.stopPropagation(); selectFile(f.path); exitFullscreen(); onChange(); });
       g.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -514,7 +514,7 @@ function connRow(otherPath, dir, onChange) {
   const row = el('button', {
     cls: `graph-conn graph-conn-${dir}`, type: 'button',
     title: otherPath + '\nclick: focus this file',
-    on: { click: () => { setFileTraceRoot(otherPath); selectPath(otherPath); onChange(); } },
+    on: { click: () => { selectFile(otherPath); onChange(); } },
   });
   row.appendChild(el('span', { cls: 'graph-conn-name', text: basename(otherPath) }));
   row.appendChild(el('span', { cls: 'graph-conn-tag', text: dirOf(otherPath) || '/' }));

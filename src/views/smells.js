@@ -1,4 +1,4 @@
-import { STATE, toggleSmellKindFilter, clearSmellsFileFilter, selectPath, setActiveTab } from '../state.js';
+import { STATE, toggleSmellKindFilter, clearSmellsFileFilter, selectFile, exitFullscreen } from '../state.js';
 import { el } from '../dom.js';
 
 const KINDS = [
@@ -89,7 +89,7 @@ function item(f, onChange) {
   if (f.fnName) why.appendChild(el('span', { cls: 'smell-fn', text: ` · fn: ${f.fnName}` }));
   why.appendChild(el('button', {
     cls: 'smell-open', type: 'button', text: 'open file',
-    on: { click: () => { selectPath(f.file); setActiveTab('functions'); onChange(); } },
+    on: { click: () => { selectFile(f.file); exitFullscreen(); onChange(); } },
   }));
   row.appendChild(why);
   return row;
