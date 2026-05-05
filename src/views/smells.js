@@ -1,5 +1,6 @@
 import { STATE, toggleSmellKindFilter, clearSmellsFileFilter, selectFile, exitFullscreen } from '../state.js';
 import { el } from '../dom.js';
+import { smellExportBar } from '../smells-export.js';
 
 const KINDS = [
   { id: 'unresolved-call',   label: 'hallucinated' },
@@ -24,8 +25,22 @@ export function renderSmells(onChange) {
   ]));
   wrap.appendChild(chips(onChange));
   if (STATE.smellsFileFilter) wrap.appendChild(fileChip(onChange));
+  const filtered = currentFiltered();
+  if (filtered.length) {
+    const slug = STATE.smellsFileFilter
+      ? STATE.smellsFileFilter.replace(/[\\/]/g, '_')
+      : (STATE.smellsKindFilter.size ? [...STATE.smellsKindFilter].sort().join('-') : 'all');
+    wrap.appendChild(smellExportBar(filtered, slug));
+  }
   wrap.appendChild(list(onChange));
   return wrap;
+}
+
+function currentFiltered() {
+  let items = STATE.smells;
+  if (STATE.smellsKindFilter.size) items = items.filter(f => STATE.smellsKindFilter.has(f.kind));
+  if (STATE.smellsFileFilter) items = items.filter(f => f.file === STATE.smellsFileFilter);
+  return items;
 }
 
 function chips(onChange) {

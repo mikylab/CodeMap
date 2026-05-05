@@ -31,21 +31,28 @@ export function effectBadges(entry, opts = {}) {
   return row;
 }
 
-// Compact 6-slot strip used by the sidebar — one rect per tag, fully on
-// for direct, dim for inherited, faint background for absent.
+// Compact effect indicator — one labeled chip per *present* tag.
+// Direct effects render filled; inherited render outlined; absent are skipped
+// entirely so the row doesn't look like a loading/progress bar.
 export function effectStrip(entry) {
   const strip = el('div', { cls: 'fx-strip' });
+  if (!entry) return strip;
   for (const tag of EFFECT_TAGS) {
-    let cls = 'fx-slot';
-    let style = null;
-    if (entry && entry.direct && entry.direct.has(tag)) {
-      cls += ' on';
-      style = { background: colorFor(tag) };
-    } else if (entry && entry.inherited && entry.inherited.has(tag)) {
-      cls += ' inh';
-      style = { background: colorFor(tag) };
-    }
-    strip.appendChild(el('div', { cls, title: tag, style }));
+    const isDirect = entry.direct && entry.direct.has(tag);
+    const isInherited = !isDirect && entry.inherited && entry.inherited.has(tag);
+    if (!isDirect && !isInherited) continue;
+    const color = colorFor(tag);
+    const chip = el('span', {
+      cls: `fx-chip ${isDirect ? 'direct' : 'inherited'} effect-${tag}`,
+      title: `${isDirect ? 'directly performs' : 'transitively performs'} ${tag}`,
+      style: isDirect
+        ? { background: color, borderColor: color, color: '#fff' }
+        : { color, borderColor: color },
+    });
+    chip.appendChild(el('span', { cls: 'fx-chip-icon', text: iconFor(tag) }));
+    chip.appendChild(el('span', { cls: 'fx-chip-label', text: labelFor(tag) }));
+    if (isInherited) chip.appendChild(el('span', { cls: 'fx-chip-suffix', text: '(via callees)' }));
+    strip.appendChild(chip);
   }
   return strip;
 }
@@ -53,6 +60,23 @@ export function effectStrip(entry) {
 function colorFor(tag) {
   const map = { net: '#4d8df0', fs: '#e08a3c', db: '#a874e0', exec: '#e0584d', dom: '#4dbf7a', env: '#c8a93a' };
   return map[tag] || '#888';
+}
+
+function iconFor(tag) {
+  const map = { net: '⇆', fs: '▤', db: '⛃', exec: '▶', dom: '◫', env: '$' };
+  return map[tag] || '•';
+}
+
+function labelFor(tag) {
+  const map = {
+    net: 'Network',
+    fs: 'Filesystem',
+    db: 'Database',
+    exec: 'Subprocess',
+    dom: 'DOM',
+    env: 'Environment',
+  };
+  return map[tag] || tag;
 }
 
 export function hasAnyTag(entry) {

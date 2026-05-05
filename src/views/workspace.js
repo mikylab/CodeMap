@@ -7,6 +7,7 @@ import { el, basename } from '../dom.js';
 import { effectBadges, hasAnyTag, effectStrip } from '../effect-badges.js';
 import { renderTraceMap } from './trace-graph-view.js';
 import { renderOverview } from './overview.js';
+import { smellExportBar } from '../smells-export.js';
 
 // Modes available depend on the kind of selection.
 const FILE_MODES = ['summary', 'source', 'calls', 'risk', 'deps'];
@@ -178,8 +179,10 @@ function modeBody(sel, onChange) {
 // ---------- REPO modes ----------
 
 function summaryRepo(onChange) {
-  // Reuse Overview view directly.
-  return renderOverview();
+  const wrap = el('div', { cls: 'ws-pad' });
+  wrap.appendChild(repoOverviewCard(onChange));
+  wrap.appendChild(renderOverview());
+  return wrap;
 }
 
 function riskRepo(onChange) {
@@ -189,12 +192,95 @@ function riskRepo(onChange) {
     wrap.appendChild(el('div', { cls: 'sb-empty', text: 'No smells detected. ✓' }));
     return wrap;
   }
-  wrap.appendChild(el('div', { cls: 'view-hint' }, [
+  const head = el('div', { cls: 'view-hint' }, [
     el('span', { cls: 'view-hint-name', text: 'Risk' }),
     el('span', { text: ` — ${all.length} finding${all.length === 1 ? '' : 's'} across the repo. Click to open the file.` }),
-  ]));
+  ]);
+  wrap.appendChild(head);
+  wrap.appendChild(smellExportBar(all, 'all-smells'));
   wrap.appendChild(smellList(all, onChange));
   return wrap;
+}
+
+function repoOverviewCard(onChange) {
+  const card = el('div', { cls: 'ov-summary-card' });
+  const stepsByCat = new Map();
+  for (const s of STATE.walk) if (!stepsByCat.has(s.category)) stepsByCat.set(s.category, s);
+
+  const arch = stepsByCat.get('archetype');
+  const entry = stepsByCat.get('entry');
+  const core = stepsByCat.get('core');
+
+  // Header row.
+  const head = el('div', { cls: 'ov-summary-head' });
+  head.appendChild(el('div', { cls: 'ov-summary-title', text: 'What is this repo?' }));
+  head.appendChild(el('div', { cls: 'ov-summary-sub', text:
+    arch ? arch.content : 'No framework signature detected — this looks like a library or script collection.' }));
+  card.appendChild(head);
+
+  const grid = el('div', { cls: 'ov-summary-grid' });
+
+  // Entry points
+  if (entry && (entry.fns.length || entry.files.length)) {
+    grid.appendChild(ovSection('Entry points', entry.fns.length ? entry.fns.slice(0, 4) : entry.files.slice(0, 4),
+      item => entry.fns.includes(item) ? fnChipBtn(item, onChange) : fileChipBtn(item, onChange)));
+  }
+
+  // Core modules (most-imported)
+  if (core && core.files.length) {
+    grid.appendChild(ovSection('Most-imported', core.files.slice(0, 4),
+      p => fileChipBtn(p, onChange)));
+  }
+
+  // Top external deps
+  const deps = topExternalDeps(5);
+  if (deps.length) {
+    grid.appendChild(ovSection('Top external deps', deps,
+      d => el('span', { cls: 'walk-fn-chip ov-dep-chip', text: `${d.lib} · ${d.count}×` })));
+  }
+
+  card.appendChild(grid);
+  return card;
+}
+
+function ovSection(label, items, makeChip) {
+  const sec = el('div', { cls: 'ov-summary-sec' });
+  sec.appendChild(el('div', { cls: 'ws-section-label', text: label }));
+  const row = el('div', { cls: 'chip-row' });
+  for (const it of items) row.appendChild(makeChip(it));
+  sec.appendChild(row);
+  return sec;
+}
+
+function fileChipBtn(path, onChange) {
+  return el('button', {
+    cls: 'walk-fn-chip walk-file-chip', type: 'button', text: path,
+    title: `Open ${path}`,
+    on: { click: () => { selectFile(path); onChange(); } },
+  });
+}
+
+function fnChipBtn(name, onChange) {
+  return el('button', {
+    cls: 'walk-fn-chip', type: 'button', text: name,
+    title: `Open ${name}()`,
+    on: { click: () => {
+      const fn = STATE.fnByName.get(name);
+      if (fn) { selectFn(fn); onChange(); }
+    } },
+  });
+}
+
+function topExternalDeps(n) {
+  const counts = new Map();
+  for (const f of STATE.files) for (const im of f.imports) {
+    if (isStdlib(im.lib)) continue;
+    counts.set(im.lib, (counts.get(im.lib) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([lib, count]) => ({ lib, count }))
+    .sort((a, b) => b.count - a.count || a.lib.localeCompare(b.lib))
+    .slice(0, n);
 }
 
 function depsRepo() {

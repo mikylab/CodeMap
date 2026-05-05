@@ -382,10 +382,13 @@ button, input, select { font: inherit; color: inherit; }
 .walk-card {
   background: var(--bg); border: 0.5px solid var(--border2);
   border-top: 4px solid var(--border2);
-  border-radius: 10px; padding: 0; overflow: hidden;
-  display: flex; flex-direction: column;
+  border-radius: 10px; padding: 0;
+  display: flex; flex-direction: column; min-width: 0;
   transition: box-shadow 0.15s;
 }
+.walk-card-head, .walk-card-body-wrap, .walk-card-teaser { min-width: 0; }
+.walk-card-body-wrap > * { min-width: 0; }
+.walk-step-title, .walk-card-body, .walk-note { overflow-wrap: anywhere; word-break: break-word; }
 .walk-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
 .walk-card.expanded { grid-column: span 2; }
 @media (max-width: 720px) {
@@ -445,6 +448,8 @@ button, input, select { font: inherit; color: inherit; }
   border-radius: 6px; background: var(--bg2);
   border: 0.5px solid var(--border2); color: var(--text);
   cursor: pointer; transition: all 0.12s;
+  max-width: 100%; overflow-wrap: anywhere; word-break: break-all;
+  text-align: left;
 }
 .walk-fn-chip:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 .walk-file-chip::before {
@@ -808,7 +813,7 @@ button, input, select { font: inherit; color: inherit; }
 .graph-node-label.match { fill: var(--accent); font-weight: 600; }
 .graph-node-label {
   font-family: var(--font-mono); font-size: 10px; fill: var(--text);
-  pointer-events: none;
+  pointer-events: all; cursor: pointer;
 }
 .graph-conn-out { border-left: 2px solid var(--accent); }
 .graph-conn-in  { border-left: 2px solid var(--success); }
@@ -931,21 +936,24 @@ button, input, select { font: inherit; color: inherit; }
 }
 
 .fx-strip {
-  display: flex;
-  gap: 2px;
-  height: 4px;
-  margin: 2px 0 4px 0;
-  padding-left: 24px;
+  display: flex; flex-wrap: wrap; gap: 5px;
+  margin: 4px 0 8px 0;
 }
-.fx-slot {
-  flex: 1 0 auto;
-  width: 10px;
-  height: 4px;
-  border-radius: 1px;
-  background: rgba(127, 127, 127, 0.18);
+.fx-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--font-sans); font-size: 11px; font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 3px 9px; border-radius: 4px;
+  border: 1px solid currentColor;
+  line-height: 1.4;
 }
-.fx-slot.on  { opacity: 1; }
-.fx-slot.inh { opacity: 0.55; }
+.fx-chip.inherited { background: transparent; border-style: dashed; }
+.fx-chip-icon { font-size: 12px; line-height: 1; }
+.fx-chip-label { line-height: 1; }
+.fx-chip-suffix {
+  font-family: var(--font-mono); font-size: 9px; font-weight: 400;
+  opacity: 0.75; letter-spacing: 0;
+}
 
 .fn-effects { display: inline-flex; gap: 2px; margin-left: 6px; }
 
@@ -1296,3 +1304,49 @@ button, input, select { font: inherit; color: inherit; }
   background: var(--bg2); border-left: 2px solid var(--accent); border-radius: 3px;
 }
 
+
+/* Repo overview summary card */
+.ov-summary-card {
+  border: 0.5px solid var(--border2); border-radius: 10px;
+  padding: 16px 18px; margin-bottom: 16px;
+  background: var(--bg);
+}
+.ov-summary-head { margin-bottom: 12px; }
+.ov-summary-title {
+  font-family: var(--font-sans); font-size: 13px; font-weight: 600;
+  color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+.ov-summary-sub {
+  font-family: var(--font-sans); font-size: 14px; color: var(--text); line-height: 1.5;
+}
+.ov-summary-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.ov-summary-sec { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ov-dep-chip { cursor: default; }
+
+/* Smell export bar */
+.smell-export-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 10px 12px; margin: 10px 0;
+  background: var(--bg2); border: 0.5px dashed var(--border2);
+  border-radius: 6px;
+}
+.smell-export-label {
+  font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.smell-export-btn {
+  font-family: var(--font-mono); font-size: 12px; padding: 5px 12px;
+  background: var(--bg); color: var(--text);
+  border: 0.5px solid var(--border2); border-radius: 4px;
+  cursor: pointer; transition: all 0.12s;
+}
+.smell-export-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.smell-export-btn:disabled { opacity: 0.7; cursor: default; }
+.smell-export-count {
+  margin-left: auto;
+  font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+}

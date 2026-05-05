@@ -131,9 +131,11 @@ function countImportEdges() {
 }
 
 function currentRoot() {
+  // Prefer the user's explicit selection — fall back to the file-trace root
+  // (set on initial load) only when nothing is selected.
+  if (STATE.selectedPath && STATE.byPath.has(STATE.selectedPath)) return STATE.selectedPath;
   const r = STATE.fileTraceRoot;
   if (r && STATE.byPath.has(r)) return r;
-  if (STATE.selectedPath && STATE.byPath.has(STATE.selectedPath)) return STATE.selectedPath;
   return null;
 }
 
