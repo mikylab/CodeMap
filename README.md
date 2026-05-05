@@ -46,12 +46,55 @@ picker. Files are read locally; nothing leaves your machine.
   *depth*, and *hotspots*, with click-to-jump pills for the worst offenders.
   Double-click a node on the map to drill in; click *reset* to start the
   trail over from the current spot.
+- **Smells** — heuristic findings for code that may not behave as it claims.
+  Five detectors:
+  - *hallucinated calls* — call sites whose name has no definition or import
+    in the repo (common in LLM-generated code)
+  - *broken imports* — relative imports that resolve to nothing
+  - *suspicious comments* — TODO / FIXME / HACK / "for now" / placeholder /
+    stub / mock / etc.
+  - *swallowed catches* — `catch (e) {}` / `except: pass` / silent Go err
+    returns
+  - *placeholders* — `localhost`, `YOUR_API_KEY`, `foo`/`bar`, `TODO` strings,
+    magic ports
+  Filter by kind, click a finding to open its file. Each file in the sidebar
+  shows a coloured dot (red = ≥1 warn, yellow = info-only) you can click to
+  filter the tab to that file.
 - **Libraries** — every external/stdlib import aggregated, sorted by usage,
   with `stdlib` vs `external` labels.
 
+## Effects (badges across tabs)
+
+Every function is tagged with the side-effects its body performs:
+`net · fs · db · exec · dom · env`. Direct effects render as solid pills
+(the function itself touches it), inherited effects as outlined pills (a
+callee somewhere down the chain does). Surfaces:
+
+- **Sidebar** — 6-slot effect strip beneath each file row.
+- **Functions tab** — badges per row, plus filter chips at the top so you can
+  isolate "every function that touches the network", etc.
+- **Trace tab** — badges in the selected-node detail pane.
+
+Detection is import-based (`import fs from 'fs'` → `fs`) plus a small set of
+patterns (`document.*` → `dom`, `process.env` → `env`, etc.), all run after
+strings and comments are stripped to suppress false positives.
+
+## Path painter
+
+Right-click a file node on the **Graph** tab — or a function row on the
+**Functions** tab — to set it as the path **start**; right-click a second
+to set the **end**. A chip strip appears at the top of Graph and Trace
+showing both endpoints and the number of paths found. Non-path nodes fade
+on the Graph so the focal subgraph stands out. Click **clear ✕** to drop
+the painter. Setting only a start (no end) shows the forward reach;
+toggle the **reverse** chip to flip to "everything that can reach here".
+
+Mixing fn-level and file-level endpoints in one painter session is
+blocked — clear the painter to switch modes.
+
 ## Keyboard shortcuts
 
-- **1–6** — jump to tab (Overview / Walk / Functions / Trace / Graph / Libraries)
+- **1–7** — jump to tab (Overview / Walk / Functions / Trace / Graph / Smells / Libraries)
 - **← →** or **[ ]** — previous / next walk step
 - **j / k** — move down / up in the file sidebar
 
@@ -93,8 +136,14 @@ CodeMap/
 │   ├── state.js            # STATE singleton + mutators + indexes
 │   ├── tabs.js             # tab registry, complexity buckets, stdlib set
 │   ├── renderer.js         # tab dispatcher (renderAll)
+│   ├── effects.js          # tagFns + reverse-BFS propagation (net/fs/db/…)
+│   ├── effects-config.js   # EFFECT_LIBS, EFFECT_PATTERNS, BUILTINS per language
+│   ├── effect-badges.js    # pill / strip render helpers
+│   ├── smells.js           # 5 detectors → SmellFinding[]
+│   ├── paths.js            # findPaths / findReach (BFS, simple paths)
 │   ├── toolbar.js / sidebar.js / statbar.js / dom.js
-│   └── views/{overview,walk,functions,trace,trace-graph-view,libraries}.js
+│   └── views/{overview,walk,functions,trace,trace-graph-view,
+│             graph,libraries,smells,paint-strip}.js
 └── tests/                  # browser-run tests, no Node required
 ```
 

@@ -422,14 +422,44 @@ function detectPlaceholders(file, _stripped, out) {
   }
 }
 
+// Length-preserving comment stripper that walks char-by-char so it doesn't
+// mistake a `//` inside a string literal (e.g. "http://...") for a comment.
 function stripCommentsOnly(text, family) {
   if (!family) return text;
-  if (family === 'js' || family === 'go' || family === 'rs' || family === 'java') {
-    return text.replace(/\/\*[\s\S]*?\*\//g, m => ' '.repeat(m.length))
-               .replace(/\/\/[^\n]*/g, m => ' '.repeat(m.length));
+  const cStyle = family === 'js' || family === 'go' || family === 'rs' || family === 'java';
+  const hashStyle = family === 'py' || family === 'rb';
+  if (!cStyle && !hashStyle) return text;
+  const out = text.split('');
+  const n = text.length;
+  let i = 0;
+  while (i < n) {
+    const c = text[i];
+    // string literal — skip past it untouched
+    if (c === '"' || c === "'" || (cStyle && c === '`')) {
+      const q = c;
+      i++;
+      while (i < n && text[i] !== q) {
+        if (text[i] === '\\') i += 2;
+        else if (text[i] === '\n' && q !== '`') break;
+        else i++;
+      }
+      i++;
+      continue;
+    }
+    if (cStyle && c === '/' && text[i + 1] === '/') {
+      while (i < n && text[i] !== '\n') { out[i] = ' '; i++; }
+      continue;
+    }
+    if (cStyle && c === '/' && text[i + 1] === '*') {
+      while (i < n && !(text[i] === '*' && text[i + 1] === '/')) { out[i] = ' '; i++; }
+      if (i < n) { out[i] = ' '; out[i + 1] = ' '; i += 2; }
+      continue;
+    }
+    if (hashStyle && c === '#') {
+      while (i < n && text[i] !== '\n') { out[i] = ' '; i++; }
+      continue;
+    }
+    i++;
   }
-  if (family === 'py' || family === 'rb') {
-    return text.replace(/#[^\n]*/g, m => ' '.repeat(m.length));
-  }
-  return text;
+  return out.join('');
 }

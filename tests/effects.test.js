@@ -127,12 +127,12 @@ test('effects: propagation — caller inherits callee tag', () => {
 test('effects: propagation cycle-safe', () => {
   const state = buildState([{
     name: 'a.js', path: 'a.js',
-    src: `function a() { b(); }\nfunction b() { a(); document.getElementById('x'); }\n`,
+    src: `function aa() { bb(); }\nfunction bb() { aa(); document.getElementById('x'); }\n`,
   }]);
   computeEffects(state);
-  // Should terminate and tag both with dom — b directly, a inherited.
-  const tA = tagsFor(state, 'a.js', 'a');
-  const tB = tagsFor(state, 'a.js', 'b');
+  // Should terminate and tag both with dom — bb directly, aa inherited.
+  const tA = tagsFor(state, 'a.js', 'aa');
+  const tB = tagsFor(state, 'a.js', 'bb');
   assertTrue(tB.direct.includes('dom'));
   assertTrue(tA.inherited.includes('dom'));
 });
@@ -140,7 +140,7 @@ test('effects: propagation cycle-safe', () => {
 test('effects: fileEffects aggregates over fns', () => {
   const state = buildState([{
     name: 'a.js', path: 'a.js',
-    src: `import fs from 'fs';\nfunction a() { fs.readFileSync('/x'); }\nfunction b() { document.getElementById('y'); }\n`,
+    src: `import fs from 'fs';\nfunction aa() { fs.readFileSync('/x'); }\nfunction bb() { document.getElementById('y'); }\n`,
   }]);
   computeEffects(state);
   const fe = state.fileEffects.get('a.js');
@@ -151,7 +151,7 @@ test('effects: fileEffects aggregates over fns', () => {
 test('effects: deterministic across two runs', () => {
   const mk = () => buildState([{
     name: 'a.js', path: 'a.js',
-    src: `import fs from 'fs';\nfunction a() { fs.readFileSync('/x'); b(); }\nfunction b() { a(); }\n`,
+    src: `import fs from 'fs';\nfunction aa() { fs.readFileSync('/x'); bb(); }\nfunction bb() { aa(); }\n`,
   }]);
   const s1 = mk(); computeEffects(s1);
   const s2 = mk(); computeEffects(s2);
