@@ -1241,3 +1241,58 @@ button, input, select { font: inherit; color: inherit; }
 .fs-body { flex: 1; overflow: auto; min-height: 0; display: flex; flex-direction: column; }
 .fs-body > * { flex: 1; min-height: 0; }
 
+/* ─── help button & panel ────────────────────────────────────────────── */
+.tb-help {
+  font-family: var(--font-mono); font-size: 14px; font-weight: 600;
+  width: 30px; height: 30px; border-radius: 50%;
+  border: 1px solid var(--border2); background: var(--bg);
+  color: var(--muted); cursor: pointer; transition: all 0.12s;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.tb-help:hover { border-color: var(--accent); color: var(--accent); }
+.tb-help.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.help-panel {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0, 0, 0, 0.45);
+  align-items: center; justify-content: center;
+  padding: 32px;
+}
+.help-card {
+  background: var(--bg); color: var(--text);
+  border-radius: 12px; border: 1px solid var(--border2);
+  width: min(720px, 100%); max-height: 90vh; overflow: auto;
+  padding: 24px 28px; box-shadow: 0 10px 30px rgba(0,0,0,.30);
+}
+.help-head { margin-bottom: 16px; position: relative; }
+.help-title { font-family: var(--font-sans); font-size: 20px; font-weight: 500; }
+.help-sub   { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
+.help-close {
+  position: absolute; top: -4px; right: -8px;
+  border: none; background: transparent; color: var(--muted);
+  cursor: pointer; padding: 6px 10px; font-size: 16px; border-radius: 4px;
+}
+.help-close:hover { color: var(--danger); background: var(--bg3); }
+
+.help-section { margin-top: 20px; }
+.help-section-title {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 600;
+  color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;
+  margin-bottom: 8px; padding-bottom: 4px;
+  border-bottom: 0.5px dotted var(--border);
+}
+.help-item {
+  display: grid; grid-template-columns: 140px 1fr;
+  gap: 12px; padding: 5px 0;
+  font-size: 12px; line-height: 1.5;
+}
+.help-term {
+  font-family: var(--font-mono); font-weight: 500; color: var(--accent);
+}
+.help-def { color: var(--text); }
+.help-note {
+  font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+  font-style: italic; margin-top: 8px; padding: 6px 10px;
+  background: var(--bg2); border-left: 2px solid var(--accent); border-radius: 3px;
+}
+

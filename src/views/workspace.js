@@ -30,7 +30,7 @@ function splash() {
   return el('div', { cls: 'upload-splash' }, [
     el('div', { cls: 'splash-icon', text: '📁' }),
     el('div', { cls: 'splash-title', text: 'Drop a folder to begin' }),
-    el('div', { cls: 'splash-sub', text: 'Codemap reads your code locally — nothing leaves your browser.' }),
+    el('div', { cls: 'splash-sub', text: 'Codemap reads your code locally — nothing leaves your browser. Press ? at any time for a glossary.' }),
   ]);
 }
 
@@ -104,8 +104,20 @@ function headerBar(sel, onChange) {
   return wrap;
 }
 
+const STAT_TOOLTIPS = {
+  cx: 'Cyclomatic complexity — count of decision points (if/for/while/&&/||/?). Higher = harder to follow. Press ? for the full glossary.',
+  callers: 'Functions in this codebase that call this one (fan-in).',
+  calls: 'Distinct in-codebase functions this one calls (fan-out). External/library calls are excluded.',
+  fns: 'Functions defined in this file.',
+  lines: 'Total lines in this file (or in this function body).',
+  line: 'Line number where this function starts.',
+  lang: 'Detected programming language.',
+  file: 'File this function is defined in.',
+};
+
 function stat(label, value, cxKey, title) {
-  const wrap = el('span', { cls: 'ws-stat', title: title || `${label}: ${value}` });
+  const tip = title || STAT_TOOLTIPS[label] || `${label}: ${value}`;
+  const wrap = el('span', { cls: 'ws-stat', title: tip });
   wrap.appendChild(el('span', { cls: 'ws-stat-lbl', text: label }));
   wrap.appendChild(el('span', { cls: 'ws-stat-val' + (cxKey ? ` cx-${cxKey}-fg` : ''), text: value }));
   return wrap;

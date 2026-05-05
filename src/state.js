@@ -61,6 +61,7 @@ export const STATE = {
   detailMode: 'summary',          // sticky: summary | source | calls | risk | deps
   fullscreen: null,               // null | 'walk' | 'graph' | 'smells'
   navSearch: '',                  // search box in navigator
+  helpOpen: false,                // glossary panel
 };
 
 // `traceRoot` is derived from history rather than stored — single source of truth.
@@ -335,6 +336,8 @@ export function setDetailMode(m) { STATE.detailMode = m; }
 export function setFullscreen(name) { STATE.fullscreen = name || null; }
 export function exitFullscreen() { STATE.fullscreen = null; }
 export function setNavSearch(s) { STATE.navSearch = s || ''; }
+export function toggleHelp() { STATE.helpOpen = !STATE.helpOpen; }
+export function closeHelp() { STATE.helpOpen = false; }
 export function selectFile(path) {
   STATE.selectedPath = path || null;
   STATE.selectedFnKey = null;

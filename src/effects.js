@@ -92,9 +92,14 @@ function referencesBinding(cleaned, name) {
 function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
 function bodySlice(file, fn) {
+  // Take exactly fn.lines from the function's start. Using +1 (to grab the
+  // closing brace) leaks one-line functions into the *next* function's
+  // signature/body, which would mis-tag the current fn with the neighbour's
+  // direct effects. Effect detection doesn't need the closing brace.
   const lines = file.src.split('\n');
   const start = Math.max(0, fn.lineNum - 1);
-  return lines.slice(start, start + fn.lines + 1).join('\n');
+  const span = Math.max(fn.lines, 1);
+  return lines.slice(start, start + span).join('\n');
 }
 
 // Strip strings then comments. Order matters — a comment marker inside a

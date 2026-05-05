@@ -1,4 +1,4 @@
-import { STATE, setFullscreen, toggleFnEffectFilter } from './state.js';
+import { STATE, setFullscreen, toggleFnEffectFilter, toggleHelp } from './state.js';
 import { EFFECT_TAGS } from './effects-config.js';
 import { el, clear } from './dom.js';
 
@@ -13,7 +13,18 @@ export function renderToolbar(onChange, onDropClick) {
     root.appendChild(smellBadge(onChange));
   }
   root.appendChild(projectBadge());
+  root.appendChild(helpButton(onChange));
   root.appendChild(dropButton(onDropClick));
+}
+
+function helpButton(onChange) {
+  return el('button', {
+    cls: 'tb-help' + (STATE.helpOpen ? ' active' : ''),
+    type: 'button',
+    text: '?',
+    title: 'What do these abbreviations mean? (h)',
+    on: { click: () => { toggleHelp(); onChange(); } },
+  });
 }
 
 function logo() {
