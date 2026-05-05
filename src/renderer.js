@@ -8,6 +8,7 @@ import { renderFunctions } from './views/functions.js';
 import { renderLibraries } from './views/libraries.js';
 import { renderTrace } from './views/trace.js';
 import { renderGraphView } from './views/graph.js';
+import { renderSmells } from './views/smells.js';
 import { clear } from './dom.js';
 
 export function renderAll() {
@@ -31,6 +32,7 @@ function viewFor(tab) {
     case 'libraries': return renderLibraries();
     case 'trace':     return renderTrace(renderAll);
     case 'graph':     return renderGraphView(renderAll);
+    case 'smells':    return renderSmells(renderAll);
     default:          return renderOverview();
   }
 }

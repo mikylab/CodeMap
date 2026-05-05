@@ -1,7 +1,8 @@
-import { STATE, selectPath, setSidebarFilter, visibleFiles, clearTraceHistory, setActiveTab, getTraceRoot, toggleDir } from './state.js';
+import { STATE, selectPath, setSidebarFilter, visibleFiles, clearTraceHistory, setActiveTab, getTraceRoot, toggleDir, setSmellsFileFilter } from './state.js';
 import { cxBucket } from './tabs.js';
 import { fnKey } from './trace-graph.js';
 import { el, clear, alpha } from './dom.js';
+import { effectStrip } from './effect-badges.js';
 
 export function renderSidebar(onChange) {
   const root = document.getElementById('sidebar');
@@ -73,6 +74,12 @@ function appendNode(list, node, depth, activeFnKey, filtering, onChange) {
   const files = node.files.slice().sort((a, b) => a.name.localeCompare(b.name));
   for (const f of files) {
     list.appendChild(fileItem(f, depth, onChange));
+    const fxe = STATE.fileEffects && STATE.fileEffects.get(f.path);
+    if (fxe && (fxe.direct.size || fxe.inherited.size)) {
+      const strip = effectStrip(fxe);
+      strip.style.paddingLeft = (10 + depth * 12 + 24) + 'px';
+      list.appendChild(strip);
+    }
     if (STATE.selectedPath === f.path) list.appendChild(fnList(f, depth, activeFnKey, onChange));
   }
 }
@@ -107,6 +114,7 @@ function fileItem(f, depth, onChange) {
     on: { click: () => { selectPath(f.path); onChange(); } },
   });
   item.appendChild(el('span', { cls: 'sb-twirl', text: active ? '▾' : '▸' }));
+  item.appendChild(smellDot(f, onChange));
   item.appendChild(extBadge(f));
   item.appendChild(el('span', { cls: 'file-name', text: f.name }));
   item.appendChild(el('span', { cls: `file-cx cx-${cxBucket(f.cx)}-fg`, text: f.cx.toFixed(1) }));
@@ -142,6 +150,25 @@ function fnList(f, depth, activeFnKey, onChange) {
     ]));
   }
   return wrap;
+}
+
+function smellDot(f, onChange) {
+  const findings = STATE.smellsByFile && STATE.smellsByFile.get(f.path);
+  if (!findings || !findings.length) return el('span', { cls: 'smell-dot smell-dot-none' });
+  const warns = findings.filter(x => x.severity === 'warn').length;
+  const cls = warns ? 'smell-dot smell-dot-warn' : 'smell-dot smell-dot-info';
+  return el('span', {
+    cls,
+    title: `${findings.length} smell${findings.length === 1 ? '' : 's'} (${warns} warn, ${findings.length - warns} info)`,
+    on: {
+      click: e => {
+        e.stopPropagation();
+        setSmellsFileFilter(f.path);
+        setActiveTab('smells');
+        onChange();
+      },
+    },
+  });
 }
 
 function extBadge(f) {

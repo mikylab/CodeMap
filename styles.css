@@ -886,3 +886,138 @@ button, input, select { font: inherit; color: inherit; }
   font-family: var(--font-mono); font-size: 13px;
   color: var(--accent); text-align: center;
 }
+
+/* --- Phase 9a: effect badges ----------------------------------------- */
+.effect-badge {
+  display: inline-block;
+  font: 10px/1 var(--font-mono);
+  letter-spacing: 0.04em;
+  padding: 2px 5px;
+  border-radius: 3px;
+  margin-left: 4px;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+.effect-badge.direct   { color: #fff; }
+.effect-badge.inherited{ background: transparent; border: 1px solid currentColor; }
+.effect-badge.dashed   { background: transparent; border: 1px dashed currentColor; }
+
+.effect-net  { color: #4d8df0; }
+.effect-fs   { color: #e08a3c; }
+.effect-db   { color: #a874e0; }
+.effect-exec { color: #e0584d; }
+.effect-dom  { color: #4dbf7a; }
+.effect-env  { color: #c8a93a; }
+
+.effect-badge.direct.effect-net  { background: #4d8df0; }
+.effect-badge.direct.effect-fs   { background: #e08a3c; }
+.effect-badge.direct.effect-db   { background: #a874e0; }
+.effect-badge.direct.effect-exec { background: #e0584d; }
+.effect-badge.direct.effect-dom  { background: #4dbf7a; }
+.effect-badge.direct.effect-env  { background: #c8a93a; }
+
+.effect-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.fx-strip {
+  display: flex;
+  gap: 2px;
+  height: 4px;
+  margin: 2px 0 4px 0;
+  padding-left: 24px;
+}
+.fx-slot {
+  flex: 1 0 auto;
+  width: 10px;
+  height: 4px;
+  border-radius: 1px;
+  background: rgba(127, 127, 127, 0.18);
+}
+.fx-slot.on  { opacity: 1; }
+.fx-slot.inh { opacity: 0.55; }
+
+.fn-effects { display: inline-flex; gap: 2px; margin-left: 6px; }
+
+.fn-fx-chips { display: flex; gap: 4px; flex-wrap: wrap; padding: 4px 0; }
+.fn-fx-chip {
+  font: 10px/1 var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 10px;
+  border: 1px solid currentColor;
+  cursor: pointer;
+  background: transparent;
+}
+.fn-fx-chip.on { color: #fff; }
+.fn-fx-chip.on.effect-net  { background: #4d8df0; border-color: #4d8df0; }
+.fn-fx-chip.on.effect-fs   { background: #e08a3c; border-color: #e08a3c; }
+.fn-fx-chip.on.effect-db   { background: #a874e0; border-color: #a874e0; }
+.fn-fx-chip.on.effect-exec { background: #e0584d; border-color: #e0584d; }
+.fn-fx-chip.on.effect-dom  { background: #4dbf7a; border-color: #4dbf7a; }
+.fn-fx-chip.on.effect-env  { background: #c8a93a; border-color: #c8a93a; }
+
+/* --- Phase 9b: smells -------------------------------------------------- */
+.smell-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  margin-right: 4px; vertical-align: middle;
+  background: transparent;
+}
+.smell-dot-warn { background: #e0584d; cursor: pointer; }
+.smell-dot-info { background: #c8a93a; cursor: pointer; }
+.smell-dot-none { background: transparent; }
+
+.smells-root { padding: 12px 14px; }
+.smells-list { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.smell-item {
+  border-left: 3px solid transparent;
+  padding: 8px 12px; background: rgba(127,127,127,0.06); border-radius: 4px;
+  font-size: 13px;
+}
+.smell-warn { border-left-color: #e0584d; }
+.smell-info { border-left-color: #c8a93a; }
+.smell-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.smell-sev { font-size: 14px; }
+.sev-warn { color: #e0584d; }
+.sev-info { color: #c8a93a; }
+.smell-loc { font-family: var(--font-mono); color: var(--accent); }
+.smell-kind { font-family: var(--font-mono); font-size: 11px; opacity: 0.8; }
+.smell-snippet {
+  font-family: var(--font-mono); font-size: 12px;
+  margin: 4px 0; padding: 4px 8px;
+  background: rgba(0,0,0,0.18); border-radius: 3px; white-space: pre-wrap;
+}
+.smell-why { display: flex; align-items: center; gap: 8px; font-size: 12px; opacity: 0.9; }
+.smell-fn { opacity: 0.7; }
+.smell-open {
+  margin-left: auto; font: 11px var(--font-mono);
+  padding: 3px 8px; border: 1px solid currentColor; border-radius: 3px;
+  background: transparent; cursor: pointer; color: var(--accent);
+}
+
+/* --- Phase 9c: paint chip strip --------------------------------------- */
+.paint-strip {
+  display: flex; gap: 8px; align-items: center;
+  padding: 6px 12px; border-bottom: 1px solid rgba(127,127,127,0.18);
+  font-family: var(--font-mono); font-size: 12px;
+}
+.paint-chip {
+  padding: 3px 8px; border-radius: 12px;
+  border: 1px solid currentColor; background: transparent; cursor: default;
+}
+.paint-chip.start { color: #1D9E75; }
+.paint-chip.end   { color: #E24B4A; }
+.paint-chip.empty { opacity: 0.5; }
+.paint-btn {
+  padding: 3px 8px; border-radius: 4px; border: 1px solid currentColor;
+  background: transparent; cursor: pointer; font: inherit;
+}
+.paint-empty {
+  padding: 24px; text-align: center; color: var(--accent);
+  font-family: var(--font-mono);
+}

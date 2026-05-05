@@ -1,6 +1,8 @@
 import { generateWalk } from './walker.js';
 import { newSkipped } from './ingest.js';
 import { fnKey, pickEntryForFile } from './trace-graph.js';
+import { computeEffects } from './effects.js';
+import { detectSmells, indexSmellsByFile } from './smells.js';
 
 const EMPTY_ANALYSIS = {
   edges: [], degree: new Map(), libToPaths: new Map(),
@@ -43,6 +45,14 @@ export const STATE = {
   graphHideIsolated: true,
   fileImports: new Map(),
   fileImporters: new Map(),
+  effects: new Map(),
+  fileEffects: new Map(),
+  fnEffectFilter: new Set(),
+  smells: [],
+  smellsByFile: new Map(),
+  smellsKindFilter: new Set(),
+  smellsFileFilter: null,
+  paint: { kind: null, startKey: null, endKey: null, direction: 'forward' },
   fileTraceRoot: null,
   fileTraceHistory: [],
   fileTraceHistoryIdx: -1,
@@ -69,6 +79,12 @@ export function setFiles(files, analysis = EMPTY_ANALYSIS) {
   STATE.fanOut = analysis.fanOut || new Map();
   STATE.fileImports = analysis.fileImports || new Map();
   STATE.fileImporters = analysis.fileImporters || new Map();
+  computeEffects(STATE);
+  STATE.smells = detectSmells(STATE);
+  STATE.smellsByFile = indexSmellsByFile(STATE.smells);
+  STATE.smellsKindFilter = new Set();
+  STATE.smellsFileFilter = null;
+  STATE.paint = { kind: null, startKey: null, endKey: null, direction: 'forward' };
   STATE.walk = generateWalk(STATE);
   STATE.walkIdx = 0;
   STATE.expandedDirs = defaultExpandedDirs(files);
@@ -271,6 +287,35 @@ export function clearTraceHistory(fn) {
 export function setWalkIdx(i) {
   if (!STATE.walk.length) { STATE.walkIdx = 0; return; }
   STATE.walkIdx = Math.max(0, Math.min(STATE.walk.length - 1, i));
+}
+
+export function toggleFnEffectFilter(tag) {
+  if (STATE.fnEffectFilter.has(tag)) STATE.fnEffectFilter.delete(tag);
+  else STATE.fnEffectFilter.add(tag);
+}
+
+export function toggleSmellKindFilter(kind) {
+  if (STATE.smellsKindFilter.has(kind)) STATE.smellsKindFilter.delete(kind);
+  else STATE.smellsKindFilter.add(kind);
+}
+
+export function setSmellsFileFilter(path) { STATE.smellsFileFilter = path || null; }
+export function clearSmellsFileFilter() { STATE.smellsFileFilter = null; }
+
+export function setPaintEndpoint(role, kind, key) {
+  // role: 'start' | 'end'.  kind: 'fn' | 'file'.
+  const p = STATE.paint;
+  if (p.kind && p.kind !== kind) return false; // mixing modes blocked
+  p.kind = kind;
+  if (role === 'start') p.startKey = key;
+  else p.endKey = key;
+  return true;
+}
+export function clearPaint() {
+  STATE.paint = { kind: null, startKey: null, endKey: null, direction: 'forward' };
+}
+export function reversePaintDirection() {
+  STATE.paint.direction = STATE.paint.direction === 'forward' ? 'reverse' : 'forward';
 }
 
 export function setActiveTab(name) { STATE.activeTab = name; }

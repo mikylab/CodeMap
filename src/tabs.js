@@ -4,6 +4,7 @@ export const TABS = [
   { id: 'functions', label: 'Functions', enabled: true },
   { id: 'trace',     label: 'Trace',     enabled: true },
   { id: 'graph',     label: 'Graph',     enabled: true },
+  { id: 'smells',    label: 'Smells',    enabled: true },
   { id: 'libraries', label: 'Libraries', enabled: true },
 ];
 

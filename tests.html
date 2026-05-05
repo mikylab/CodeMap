@@ -17,6 +17,9 @@
     await import('./tests/walker.test.js');
     await import('./tests/trace.test.js');
     await import('./tests/graph.test.js');
+    await import('./tests/effects.test.js');
+    await import('./tests/smells.test.js');
+    await import('./tests/paths.test.js');
     const { report } = await import('./tests/runner.js');
     await report();
   </script>
