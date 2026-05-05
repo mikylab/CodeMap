@@ -38,6 +38,9 @@ export const STATE = {
   expandedTraceSource: true,
   collapsedGraphDirs: new Set(),
   graphView: null,
+  graphSize: null,
+  graphFilter: '',
+  graphHideIsolated: true,
   fileImports: new Map(),
   fileImporters: new Map(),
   fileTraceRoot: null,
@@ -71,7 +74,7 @@ export function setFiles(files, analysis = EMPTY_ANALYSIS) {
   STATE.expandedDirs = defaultExpandedDirs(files);
   STATE.expandedFns = new Set();
   STATE.expandedWalkSteps = new Set();
-  STATE.collapsedGraphDirs = new Set();
+  STATE.collapsedGraphDirs = defaultCollapsedGraphDirs(files);
   STATE.graphView = null;
   const firstFile = files[0] || null;
   STATE.selectedPath = firstFile ? firstFile.path : null;
@@ -141,8 +144,30 @@ export function toggleGraphDir(dir) {
   STATE.graphView = null;
 }
 
+export function resetGraphCollapse() {
+  STATE.collapsedGraphDirs = defaultCollapsedGraphDirs(STATE.files);
+  STATE.graphView = null;
+}
+
 export function setGraphView(v) { STATE.graphView = v; }
 export function resetGraphView() { STATE.graphView = null; }
+
+export function zoomGraph(factor) {
+  const size = STATE.graphSize;
+  if (!size) return;
+  const v = STATE.graphView || { x: 0, y: 0, w: size.W, h: size.H };
+  const cx = v.x + v.w / 2, cy = v.y + v.h / 2;
+  const nw = Math.max(size.W * 0.05, Math.min(size.W * 6, v.w * factor));
+  const nh = Math.max(size.H * 0.05, Math.min(size.H * 6, v.h * factor));
+  STATE.graphView = { x: cx - nw / 2, y: cy - nh / 2, w: nw, h: nh };
+}
+
+export function setGraphFilter(s) { STATE.graphFilter = s || ''; }
+export function toggleGraphHideIsolated() { STATE.graphHideIsolated = !STATE.graphHideIsolated; STATE.graphView = null; }
+export function clearGraphFocus() {
+  STATE.fileTraceRoot = null;
+  STATE.selectedPath = null;
+}
 
 export function setFileTraceRoot(path) {
   if (!path) return;
@@ -159,6 +184,42 @@ export function gotoFileTraceHistory(idx) {
   if (idx < 0 || idx >= STATE.fileTraceHistory.length) return;
   STATE.fileTraceHistoryIdx = idx;
   STATE.fileTraceRoot = STATE.fileTraceHistory[idx];
+}
+
+const COLLAPSE_THRESHOLD = 15;
+
+// Returns the meaningful directory clusters for the given files: each top-level
+// dir, OR — when there's a single wrapper dir — the wrapper's child dirs.
+// Collapsing the wrapper alone would just produce one mega-cluster, so we drill
+// in. Result is Map<dirPath, fileCount> sorted by descending count.
+export function topClusterMap(files) {
+  const tops = new Map();
+  for (const f of files) {
+    const i = f.path.indexOf('/');
+    if (i <= 0) continue;
+    const top = f.path.slice(0, i);
+    if (!tops.has(top)) tops.set(top, []);
+    tops.get(top).push(f.path);
+  }
+  const out = new Map();
+  if (tops.size === 1) {
+    const [topName, paths] = [...tops][0];
+    for (const p of paths) {
+      const rest = p.slice(topName.length + 1);
+      const j = rest.indexOf('/');
+      if (j <= 0) continue;
+      const name = `${topName}/${rest.slice(0, j)}`;
+      out.set(name, (out.get(name) || 0) + 1);
+    }
+  } else {
+    for (const [top, paths] of tops) out.set(top, paths.length);
+  }
+  return out;
+}
+
+function defaultCollapsedGraphDirs(files) {
+  if (files.length < COLLAPSE_THRESHOLD) return new Set();
+  return new Set(topClusterMap(files).keys());
 }
 
 function defaultExpandedDirs(files) {

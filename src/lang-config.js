@@ -1,6 +1,6 @@
 export const LANG_CONFIG = {
   js: {
-    name: 'JavaScript', color: '#EF9F27', comment: '//',
+    name: 'JavaScript', color: '#EF9F27', comment: '//', localStyle: 'path',
     fn: [
       /(?:function|async\s+function)\s+(\w+)/gm,
       /(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\(/gm,
@@ -20,7 +20,7 @@ export const LANG_CONFIG = {
     ],
   },
   go: {
-    name: 'Go', color: '#5DCAA5', comment: '//',
+    name: 'Go', color: '#5DCAA5', comment: '//', localStyle: 'path',
     fn: [/func\s+(?:\([^)]+\)\s+)?(\w+)/gm],
     imports: [/import\s+(?:[\w.]+\s+)?["']([^"']+)["']/gm],
   },
@@ -30,7 +30,7 @@ export const LANG_CONFIG = {
     imports: [/use\s+(\w+)/gm],
   },
   rb: {
-    name: 'Ruby', color: '#E24B4A', comment: '#',
+    name: 'Ruby', color: '#E24B4A', comment: '#', localStyle: 'path',
     fn: [/def\s+(\w+)/gm, /class\s+(\w+)/gm, /module\s+(\w+)/gm],
     imports: [/require(?:_relative)?\s+["']([^"']+)["']/gm],
   },
@@ -46,7 +46,7 @@ LANG_CONFIG.ts  = { ...LANG_CONFIG.js, name: 'TypeScript', color: '#185FA5' };
 LANG_CONFIG.tsx = { ...LANG_CONFIG.js, name: 'TSX',        color: '#185FA5' };
 
 LANG_CONFIG.html = {
-  name: 'HTML', color: '#E04E2A', comment: '<!--',
+  name: 'HTML', color: '#E04E2A', comment: '<!--', localStyle: 'path',
   fn: [],
   imports: [
     /<script[^>]+src=["']([^"']+)["']/gim,
@@ -56,7 +56,7 @@ LANG_CONFIG.html = {
 LANG_CONFIG.htm = { ...LANG_CONFIG.html };
 
 LANG_CONFIG.css = {
-  name: 'CSS', color: '#1F7AC2', comment: '/*',
+  name: 'CSS', color: '#1F7AC2', comment: '/*', localStyle: 'path',
   fn: [],
   imports: [
     /@import\s+(?:url\()?["']([^"')]+)["']\)?/gm,

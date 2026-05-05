@@ -27,7 +27,7 @@ export function parseFile(name, src, path) {
   const newlines = newlineIndices(src);
   const fns = extractFns(src, cfg, path, newlines);
   const imports = extractImports(src, cfg, path);
-  const localImports = extractLocalImports(src, cfg);
+  const localImports = extractLocalImports(src, cfg, extOf(name));
   const cx = clamp((1 + decisionCount(src)) / Math.max(fns.length, 1), 1, 30);
 
   return {
@@ -99,19 +99,45 @@ function extractImports(src, cfg, path) {
   return out;
 }
 
-function extractLocalImports(src, cfg) {
-  // Keep every raw import spec — analyzer decides if it resolves to a file in
-  // the repo. This way Python's `from pkg.mod import X` (no leading dot) still
-  // gets a chance to resolve as a local file edge.
+function extractLocalImports(src, cfg, ext) {
+  // Path-style languages (cfg.localStyle === 'path') only treat specs starting
+  // with `.` or `/` as local. Dotted-namespace languages (Python, Java) can
+  // have bare-name local specs — keep those.
+  const pathStyle = cfg.localStyle === 'path';
   const out = []; const seen = new Set();
-  forEachMatch(src, cfg.imports, raw => {
-    raw = raw.trim();
+  const add = raw => {
     if (!raw) return;
     if (/^https?:\/\//i.test(raw) || raw.startsWith('//')) return;
     if (seen.has(raw)) return;
     seen.add(raw);
     out.push(raw);
+  };
+  forEachMatch(src, cfg.imports, raw => {
+    raw = raw.trim();
+    if (!raw) return;
+    if (pathStyle && !(raw.startsWith('.') || raw.startsWith('/'))) return;
+    add(raw);
   });
+
+  // Python `from pkg import a, b` — `pkg` alone won't resolve when pkg is a
+  // directory of modules. Emit `pkg.a`, `pkg.b` so the dotted resolver can
+  // find pkg/a.py, pkg/b.py. Handles single-line and parenthesized multi-line
+  // forms.
+  if (ext === 'py') {
+    const fromRe = /^[ \t]*from\s+(\.*[\w.]*)\s+import\s+(?:\(([\s\S]*?)\)|([^\n#]+))/gm;
+    let m;
+    while ((m = fromRe.exec(src)) !== null) {
+      const pkg = m[1];
+      if (!pkg || pkg.startsWith('.')) continue;
+      const tokens = (m[2] != null ? m[2] : m[3]).split(/[,\s]+/).filter(Boolean);
+      for (let i = 0; i < tokens.length; i++) {
+        const tok = tokens[i];
+        if (!/^[A-Za-z_]\w*$/.test(tok) || tok === 'as') continue;
+        if (tokens[i + 1] === 'as') i += 2;
+        add(`${pkg}.${tok}`);
+      }
+    }
+  }
   return out;
 }
 

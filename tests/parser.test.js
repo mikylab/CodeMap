@@ -201,6 +201,14 @@ test('parser: localImports captures relative specs', () => {
   assertFalse(out.localImports.includes('react'));
 });
 
+test('parser: python `from pkg import a, b` emits dotted specs', () => {
+  const src = `from src import formatters, helpers\nfrom pkg.sub import Thing as T\nimport os\n`;
+  const out = parseFile('m.py', src, 'm.py');
+  assertTrue(out.localImports.includes('src.formatters'));
+  assertTrue(out.localImports.includes('src.helpers'));
+  assertTrue(out.localImports.includes('pkg.sub.Thing'));
+});
+
 test('parser: calls list is sorted and deduped', () => {
   const src = `function go() { foo(); bar(); foo(); }\n`;
   const out = parseFile('a.js', src, 'a.js');

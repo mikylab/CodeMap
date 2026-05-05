@@ -727,6 +727,31 @@ button, input, select { font: inherit; color: inherit; }
   padding: 4px 10px; cursor: pointer; transition: all 0.12s;
 }
 .graph-fit-btn:hover { border-color: var(--accent); color: var(--accent); }
+.graph-search {
+  font-family: var(--font-mono); font-size: 11px;
+  background: var(--bg); color: var(--text);
+  border: 0.5px solid var(--border2); border-radius: 4px;
+  padding: 4px 8px; margin-left: auto; min-width: 180px;
+  outline: none;
+}
+.graph-search:focus { border-color: var(--accent); }
+.graph-toggle-btn {
+  font-family: var(--font-mono); font-size: 11px;
+  background: var(--bg); color: var(--muted);
+  border: 0.5px solid var(--border2); border-radius: 4px;
+  padding: 4px 10px; cursor: pointer; transition: all 0.12s;
+}
+.graph-toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
+.graph-toggle-btn.active { color: var(--text); }
+.graph-zoom-group { display: inline-flex; gap: 4px; }
+.graph-zoom-btn {
+  font-family: var(--font-mono); font-size: 13px; line-height: 1;
+  background: var(--bg); color: var(--text);
+  border: 0.5px solid var(--border2); border-radius: 4px;
+  padding: 4px 10px; cursor: pointer; min-width: 28px;
+  transition: all 0.12s;
+}
+.graph-zoom-btn:hover { border-color: var(--accent); color: var(--accent); }
 
 .graph-dir-toggles {
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
@@ -766,13 +791,15 @@ button, input, select { font: inherit; color: inherit; }
 }
 .graph-node-dir:hover rect { stroke-width: 2.5; }
 .graph-edge { fill: none; stroke-width: 1; }
-.graph-edge.edge-base { stroke: rgba(120,118,111,0.18); }
-.graph-edge.edge-dim  { stroke: rgba(120,118,111,0.06); }
-.graph-edge.edge-out  { stroke: var(--accent); stroke-width: 1.6; }
-.graph-edge.edge-in   { stroke: var(--success); stroke-width: 1.6; }
+.graph-edge.edge-base { stroke: rgba(120,118,111,0.28); }
+.graph-edge.edge-dim  { stroke: rgba(120,118,111,0.18); }
+.graph-edge.edge-out  { stroke: var(--accent); stroke-width: 2; }
+.graph-edge.edge-in   { stroke: var(--success); stroke-width: 2; }
 .graph-node { transition: opacity 0.15s; }
-.graph-node.dim { opacity: 0.25; }
+.graph-node.dim { opacity: 0.45; }
 .graph-node.focus { opacity: 1; }
+.graph-node.match circle { stroke: var(--accent); stroke-width: 2.2; }
+.graph-node-label.match { fill: var(--accent); font-weight: 600; }
 .graph-node-label {
   font-family: var(--font-mono); font-size: 10px; fill: var(--text);
   pointer-events: none;

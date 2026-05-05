@@ -140,10 +140,17 @@ function resolveLocalImport(importerPath, spec, byPath) {
     candidates.push(normPath(dir ? dir + '/' + spec : spec));
   } else {
     // Package-style dotted spec (Python "pkg.mod", Java "com.foo.Bar"). Try as
-    // a path from the repo root, and also relative to the importer's dir.
+    // a path from the repo root, then from every ancestor dir of the importer
+    // — covers the case where the repo was dropped under a wrapper folder, so
+    // `src/formatters` actually lives at `MyRepo/src/formatters.py`.
     const dotted = spec.replace(/\./g, '/');
     candidates.push(dotted);
-    if (dir) candidates.push(normPath(dir + '/' + dotted));
+    let cur = dir;
+    while (cur) {
+      candidates.push(normPath(cur + '/' + dotted));
+      const i = cur.lastIndexOf('/');
+      cur = i < 0 ? '' : cur.slice(0, i);
+    }
   }
   for (const joined of candidates) {
     if (!joined) continue;

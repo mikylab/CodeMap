@@ -1,4 +1,4 @@
-import { STATE, selectPath, setFileTraceRoot, gotoFileTraceHistory, toggleGraphDir, resetGraphView } from '../state.js';
+import { STATE, selectPath, setFileTraceRoot, gotoFileTraceHistory, toggleGraphDir, resetGraphView, zoomGraph, setGraphFilter, toggleGraphHideIsolated, clearGraphFocus, resetGraphCollapse, topClusterMap } from '../state.js';
 import { el, basename, alpha } from '../dom.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -35,12 +35,51 @@ function legend(onChange) {
   wrap.appendChild(el('span', { cls: 'graph-legend-sep', text: '·' }));
   wrap.appendChild(legendSwatch('var(--accent)', 'imports →'));
   wrap.appendChild(legendSwatch('var(--success)', 'imported by ←'));
-  wrap.appendChild(el('span', { cls: 'graph-legend-hint', text: 'scroll = zoom · drag = pan' }));
+
+  const search = el('input', {
+    cls: 'graph-search',
+    type: 'search',
+    placeholder: 'Filter files…',
+    value: STATE.graphFilter,
+    title: 'Highlight files whose path matches',
+  });
+  search.addEventListener('input', () => {
+    setGraphFilter(search.value);
+    onChange();
+    // onChange() rebuilds the toolbar DOM, which steals focus. Restore it on
+    // the freshly-mounted input so typing isn't interrupted.
+    requestAnimationFrame(() => {
+      const next = document.querySelector('.graph-search');
+      if (next) { next.focus(); next.setSelectionRange(search.value.length, search.value.length); }
+    });
+  });
+  wrap.appendChild(search);
+
   wrap.appendChild(el('button', {
+    cls: `graph-toggle-btn${STATE.graphHideIsolated ? ' active' : ''}`,
+    type: 'button',
+    text: STATE.graphHideIsolated ? 'Show isolated' : 'Hide isolated',
+    title: 'Toggle visibility of files with no in-codebase imports',
+    on: { click: () => { toggleGraphHideIsolated(); onChange(); } },
+  }));
+
+  const zoom = el('div', { cls: 'graph-zoom-group' });
+  zoom.appendChild(el('button', {
+    cls: 'graph-zoom-btn', type: 'button', text: '−',
+    title: 'Zoom out',
+    on: { click: () => { zoomGraph(1.25); onChange(); } },
+  }));
+  zoom.appendChild(el('button', {
+    cls: 'graph-zoom-btn', type: 'button', text: '+',
+    title: 'Zoom in',
+    on: { click: () => { zoomGraph(0.8); onChange(); } },
+  }));
+  zoom.appendChild(el('button', {
     cls: 'graph-fit-btn', type: 'button', text: 'Fit',
     title: 'Reset zoom and recenter',
     on: { click: () => { resetGraphView(); onChange(); } },
   }));
+  wrap.appendChild(zoom);
   return wrap;
 }
 
@@ -49,6 +88,13 @@ function dirToggleBar(onChange) {
   const wrap = el('div', { cls: 'graph-dir-toggles' });
   if (!dirs.length) return wrap;
   wrap.appendChild(el('span', { cls: 'graph-dir-toggle-label', text: 'Folders:' }));
+  wrap.appendChild(el('button', {
+    cls: 'graph-dir-chip graph-dir-reset',
+    type: 'button',
+    title: 'Restore the default folder collapse state',
+    text: '↺ Reset',
+    on: { click: () => { resetGraphCollapse(); onChange(); } },
+  }));
   for (const d of dirs) {
     const collapsed = STATE.collapsedGraphDirs.has(d.name);
     wrap.appendChild(el('button', {
@@ -63,19 +109,9 @@ function dirToggleBar(onChange) {
 }
 
 function topLevelDirs() {
-  const m = new Map();
-  for (const f of STATE.files) {
-    const d = topDir(f.path);
-    if (!d) continue;
-    m.set(d, (m.get(d) || 0) + 1);
-  }
-  return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  return [...topClusterMap(STATE.files).entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .map(([name, count]) => ({ name, count }));
-}
-
-function topDir(p) {
-  const i = p.indexOf('/');
-  return i < 0 ? '' : p.slice(0, i);
 }
 
 function legendSwatch(color, label) {
@@ -95,7 +131,7 @@ function currentRoot() {
   const r = STATE.fileTraceRoot;
   if (r && STATE.byPath.has(r)) return r;
   if (STATE.selectedPath && STATE.byPath.has(STATE.selectedPath)) return STATE.selectedPath;
-  return STATE.files[0]?.path || null;
+  return null;
 }
 
 function graphCanvas(focusPath, onChange) {
@@ -105,8 +141,14 @@ function graphCanvas(focusPath, onChange) {
 
   const collapsed = STATE.collapsedGraphDirs || new Set();
   const clusterIdFor = p => {
-    const d = topDir(p);
-    return d && collapsed.has(d) ? `__dir__:${d}` : p;
+    // Walk from the shallowest ancestor outward — the first collapsed prefix
+    // wins, so a parent dir absorbs anything below it.
+    const parts = p.split('/');
+    for (let i = 1; i < parts.length; i++) {
+      const prefix = parts.slice(0, i).join('/');
+      if (collapsed.has(prefix)) return `__dir__:${prefix}`;
+    }
+    return p;
   };
 
   // Build cluster nodes — each is either a single file or a collapsed-dir
@@ -159,13 +201,13 @@ function graphCanvas(focusPath, onChange) {
     buckets[L].push(id);
   }
   for (const b of buckets) if (b) b.sort();
-  if (isolatedIds.length) buckets.push(isolatedIds.sort());
+  if (isolatedIds.length && !STATE.graphHideIsolated) buckets.push(isolatedIds.sort());
 
   const numLayers = buckets.length || 1;
   const widest = buckets.reduce((m, b) => Math.max(m, b ? b.length : 0), 1);
-  const W = Math.max(900, widest * 160);
-  const H = Math.max(560, numLayers * 150);
-  const padX = 80, padY = 70;
+  const W = Math.max(1100, widest * 200);
+  const H = Math.max(560, numLayers * 170);
+  const padX = 90, padY = 80;
   const innerW = W - padX * 2;
   const innerH = H - padY * 2;
 
@@ -181,7 +223,7 @@ function graphCanvas(focusPath, onChange) {
       const r = node.kind === 'dir'
         ? 16 + Math.sqrt(node.lineCount / 25)
         : 6 + Math.sqrt((node.lineCount || 0) / 18);
-      positions.set(id, { x: colX, y: rowY, r, node });
+      positions.set(id, { x: colX, y: rowY, r, node, col: i });
     });
   });
 
@@ -189,6 +231,17 @@ function graphCanvas(focusPath, onChange) {
   const focusOut = focusId ? (outgoing.get(focusId) || new Set()) : null;
   const focusIn = focusId ? (incoming.get(focusId) || new Set()) : null;
   const focused = focusId ? new Set([focusId, ...(focusOut || []), ...(focusIn || [])]) : null;
+
+  const filter = (STATE.graphFilter || '').trim().toLowerCase();
+  const matchedIds = filter
+    ? new Set([...nodes.keys()].filter(id => {
+        const n = nodes.get(id);
+        if (n.kind === 'dir') return n.dir.toLowerCase().includes(filter);
+        return n.file.path.toLowerCase().includes(filter);
+      }))
+    : null;
+
+  STATE.graphSize = { W, H };
 
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('class', 'graph-svg');
@@ -198,6 +251,10 @@ function graphCanvas(focusPath, onChange) {
   svg.style.width = '100%';
   svg.style.height = '100%';
   svg.style.cursor = 'grab';
+  svg.addEventListener('click', (e) => {
+    if (e.target.closest('.graph-node')) return;
+    if (focusId) { clearGraphFocus(); onChange(); }
+  });
 
   const defs = document.createElementNS(SVG_NS, 'defs');
   defs.appendChild(arrowMarker('garrow-out', 'var(--accent)'));
@@ -235,11 +292,14 @@ function graphCanvas(focusPath, onChange) {
   ng.setAttribute('class', 'graph-nodes');
   for (const [id, pos] of positions) {
     const node = pos.node;
-    const dimmed = focused && !focused.has(id);
+    const focusDim = focused && !focused.has(id);
+    const filterDim = matchedIds && !matchedIds.has(id);
+    const dimmed = focusDim || filterDim;
+    const isMatch = !!(matchedIds && matchedIds.has(id));
     const isFocus = id === focusId;
     const g = document.createElementNS(SVG_NS, 'g');
     g.setAttribute('transform', `translate(${pos.x},${pos.y})`);
-    g.setAttribute('class', `graph-node graph-node-${node.kind}${isFocus ? ' focus' : ''}${dimmed ? ' dim' : ''}`);
+    g.setAttribute('class', `graph-node graph-node-${node.kind}${isFocus ? ' focus' : ''}${dimmed ? ' dim' : ''}${isMatch ? ' match' : ''}`);
     g.style.cursor = 'pointer';
 
     if (node.kind === 'dir') {
@@ -277,12 +337,13 @@ function graphCanvas(focusPath, onChange) {
       circle.setAttribute('stroke', isFocus ? 'var(--accent)' : (f.langColor || '#888'));
       circle.setAttribute('stroke-width', isFocus ? '2.5' : '1');
       g.appendChild(circle);
-      const showLabel = isFocus || (focused && focused.has(id)) || pos.r > 8 || nodes.size <= 60;
+      const showLabel = isFocus || isMatch || (focused && focused.has(id)) || pos.r > 8 || nodes.size <= 80;
       if (showLabel) {
         const label = document.createElementNS(SVG_NS, 'text');
-        label.setAttribute('class', 'graph-node-label');
+        label.setAttribute('class', `graph-node-label${isMatch ? ' match' : ''}`);
         label.setAttribute('x', '0');
-        label.setAttribute('y', String(pos.r + 12));
+        const labelAbove = (pos.col % 2) === 1;
+        label.setAttribute('y', String(labelAbove ? -(pos.r + 6) : (pos.r + 12)));
         label.setAttribute('text-anchor', 'middle');
         label.textContent = truncate(basename(f.path), 22);
         g.appendChild(label);
