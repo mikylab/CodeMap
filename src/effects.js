@@ -92,14 +92,36 @@ function referencesBinding(cleaned, name) {
 function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
 function bodySlice(file, fn) {
-  // Take exactly fn.lines from the function's start. Using +1 (to grab the
-  // closing brace) leaks one-line functions into the *next* function's
-  // signature/body, which would mis-tag the current fn with the neighbour's
-  // direct effects. Effect detection doesn't need the closing brace.
+  // The parser stores fn.lines = count of non-blank lines AFTER the signature
+  // line, so the natural body span is fn.lines + 1. But for brace languages
+  // a one-line function (`function foo() { bar(); }`) opens AND closes its
+  // braces on the signature line — pulling in the next line then leaks the
+  // *next* function's body into this one's slice. Detect that case and trim.
   const lines = file.src.split('\n');
   const start = Math.max(0, fn.lineNum - 1);
-  const span = Math.max(fn.lines, 1);
+  const first = lines[start] || '';
+  if (selfContainedBraceBody(first)) return first;
+  const span = Math.max(fn.lines + 1, 1);
   return lines.slice(start, start + span).join('\n');
+}
+
+// True if `line` opens at least one `{` and all braces balance on this line —
+// i.e. the function's body begins and ends here. Strings are skipped to avoid
+// braces inside string literals throwing off the count.
+function selfContainedBraceBody(line) {
+  let depth = 0, opened = false, inStr = false, q = '';
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inStr) {
+      if (c === '\\') { i++; continue; }
+      if (c === q) inStr = false;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') { inStr = true; q = c; continue; }
+    if (c === '{') { depth++; opened = true; }
+    else if (c === '}') { depth--; }
+  }
+  return opened && depth === 0;
 }
 
 // Strip strings then comments. Order matters — a comment marker inside a
