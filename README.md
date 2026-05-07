@@ -173,7 +173,9 @@ CodeMap/
 
 State lives in one `STATE` object. Every `render*` is idempotent and reads only
 from `STATE`. All parsing is regex-based and deterministic. See `CLAUDE.md` for
-philosophy and `docs/plans/` for the staged plan.
+philosophy, `docs/design.md` for the design notes, and `CHANGELOG.md` for the
+release history. Working plans live in `docs/plans/` locally but are not
+tracked in git.
 
 ## Tests
 

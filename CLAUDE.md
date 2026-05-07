@@ -229,3 +229,21 @@ Each language in `LANG_CONFIG` must have at least:
 - 1 test for function extraction
 - 1 test for import extraction
 - 1 test for a false-positive keyword that should NOT be captured
+
+---
+
+## After every change
+
+When you finish a set of changes, before handing back to the user:
+
+1. **Update `CHANGELOG.md`** under the `## Unreleased` heading with one bullet
+   per user-visible change. Keep entries terse and factual.
+2. **Update docs** affected by the change — `README.md` for user-facing
+   behavior, `docs/design.md` for design shifts, `CLAUDE.md` for workflow or
+   philosophy changes.
+3. **Write a commit message** describing the change. Use the existing style
+   (`area: short summary`, e.g. `ui:`, `fix(effects):`, `docs:`). Do **not**
+   mention Claude, Anthropic, AI assistance, or "Co-Authored-By" trailers in
+   the message — write it as if authored by the human committer.
+
+`docs/plans/` is git-ignored; do not stage it.
