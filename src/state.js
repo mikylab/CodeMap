@@ -1,6 +1,8 @@
 import { generateWalk } from './walker.js';
 import { newSkipped } from './ingest.js';
 import { fnKey, pickEntryForFile } from './trace-graph.js';
+import { computeEffects } from './effects.js';
+import { detectSmells, indexSmellsByFile } from './smells.js';
 
 const EMPTY_ANALYSIS = {
   edges: [], degree: new Map(), libToPaths: new Map(),
@@ -35,6 +37,7 @@ export const STATE = {
   expandedDirs: new Set(),
   expandedFns: new Set(),
   expandedWalkSteps: new Set(),
+  walkRevealed: new Set(),
   expandedTraceSource: true,
   collapsedGraphDirs: new Set(),
   graphView: null,
@@ -43,9 +46,23 @@ export const STATE = {
   graphHideIsolated: true,
   fileImports: new Map(),
   fileImporters: new Map(),
+  effects: new Map(),
+  fileEffects: new Map(),
+  fnEffectFilter: new Set(),
+  smells: [],
+  smellsByFile: new Map(),
+  smellsKindFilter: new Set(),
+  smellsFileFilter: null,
+  paint: { kind: null, startKey: null, endKey: null, direction: 'forward' },
   fileTraceRoot: null,
   fileTraceHistory: [],
   fileTraceHistoryIdx: -1,
+  // workspace UI
+  selectedFnKey: null,            // when set, detail pane is in fn mode
+  detailMode: 'summary',          // sticky: summary | source | calls | risk | deps
+  fullscreen: null,               // null | 'walk' | 'graph' | 'smells'
+  navSearch: '',                  // search box in navigator
+  helpOpen: false,                // glossary panel
 };
 
 // `traceRoot` is derived from history rather than stored — single source of truth.
@@ -69,15 +86,26 @@ export function setFiles(files, analysis = EMPTY_ANALYSIS) {
   STATE.fanOut = analysis.fanOut || new Map();
   STATE.fileImports = analysis.fileImports || new Map();
   STATE.fileImporters = analysis.fileImporters || new Map();
+  computeEffects(STATE);
+  STATE.smells = detectSmells(STATE);
+  STATE.smellsByFile = indexSmellsByFile(STATE.smells);
+  STATE.smellsKindFilter = new Set();
+  STATE.smellsFileFilter = null;
+  STATE.paint = { kind: null, startKey: null, endKey: null, direction: 'forward' };
   STATE.walk = generateWalk(STATE);
   STATE.walkIdx = 0;
   STATE.expandedDirs = defaultExpandedDirs(files);
   STATE.expandedFns = new Set();
   STATE.expandedWalkSteps = new Set();
+  STATE.walkRevealed = new Set();
   STATE.collapsedGraphDirs = defaultCollapsedGraphDirs(files);
   STATE.graphView = null;
   const firstFile = files[0] || null;
-  STATE.selectedPath = firstFile ? firstFile.path : null;
+  STATE.selectedPath = null;
+  STATE.selectedFnKey = null;
+  STATE.detailMode = 'summary';
+  STATE.fullscreen = null;
+  STATE.navSearch = '';
   STATE.fileTraceRoot = firstFile ? firstFile.path : null;
   STATE.fileTraceHistory = firstFile ? [firstFile.path] : [];
   STATE.fileTraceHistoryIdx = firstFile ? 0 : -1;
@@ -122,8 +150,8 @@ export function toggleFnExpanded(key) {
 }
 
 export function toggleWalkStep(idx) {
-  if (STATE.expandedWalkSteps.has(idx)) STATE.expandedWalkSteps.delete(idx);
-  else STATE.expandedWalkSteps.add(idx);
+  const open = STATE.expandedWalkSteps.has(idx);
+  STATE.expandedWalkSteps = open ? new Set() : new Set([idx]);
 }
 
 export function setAllWalkStepsExpanded(expanded) {
@@ -273,8 +301,60 @@ export function setWalkIdx(i) {
   STATE.walkIdx = Math.max(0, Math.min(STATE.walk.length - 1, i));
 }
 
+export function toggleFnEffectFilter(tag) {
+  if (STATE.fnEffectFilter.has(tag)) STATE.fnEffectFilter.delete(tag);
+  else STATE.fnEffectFilter.add(tag);
+}
+
+export function toggleSmellKindFilter(kind) {
+  if (STATE.smellsKindFilter.has(kind)) STATE.smellsKindFilter.delete(kind);
+  else STATE.smellsKindFilter.add(kind);
+}
+
+export function setSmellsFileFilter(path) { STATE.smellsFileFilter = path || null; }
+export function clearSmellsFileFilter() { STATE.smellsFileFilter = null; }
+
+export function setPaintEndpoint(role, kind, key) {
+  // role: 'start' | 'end'.  kind: 'fn' | 'file'.
+  const p = STATE.paint;
+  if (p.kind && p.kind !== kind) return false; // mixing modes blocked
+  p.kind = kind;
+  if (role === 'start') p.startKey = key;
+  else p.endKey = key;
+  return true;
+}
+export function clearPaint() {
+  STATE.paint = { kind: null, startKey: null, endKey: null, direction: 'forward' };
+}
+export function reversePaintDirection() {
+  STATE.paint.direction = STATE.paint.direction === 'forward' ? 'reverse' : 'forward';
+}
+
 export function setActiveTab(name) { STATE.activeTab = name; }
 export function setSidebarFilter(s) { STATE.sidebarFilter = s; }
+
+// workspace mutators
+export function setDetailMode(m) { STATE.detailMode = m; }
+export function setFullscreen(name) { STATE.fullscreen = name || null; }
+export function exitFullscreen() { STATE.fullscreen = null; }
+export function setNavSearch(s) { STATE.navSearch = s || ''; }
+export function toggleHelp() { STATE.helpOpen = !STATE.helpOpen; }
+export function closeHelp() { STATE.helpOpen = false; }
+export function selectFile(path) {
+  STATE.selectedPath = path || null;
+  STATE.selectedFnKey = null;
+  if (path) expandAncestors(path);
+}
+export function selectFn(fn) {
+  if (!fn) { STATE.selectedFnKey = null; return; }
+  STATE.selectedPath = fn.file;
+  STATE.selectedFnKey = fnKey(fn);
+  expandAncestors(fn.file);
+}
+export function clearSelection() {
+  STATE.selectedPath = null;
+  STATE.selectedFnKey = null;
+}
 export function setFunctionsSort(s) { STATE.functionsSort = s; }
 export function setSkipped(s) { STATE.skipped = s || newSkipped(); }
 

@@ -1,7 +1,9 @@
-import { STATE, setFunctionsSort, selectPath, setTraceRoot, setActiveTab, toggleFnExpanded } from '../state.js';
+import { STATE, setFunctionsSort, selectPath, setTraceRoot, setActiveTab, toggleFnExpanded, toggleFnEffectFilter, setPaintEndpoint } from '../state.js';
 import { cxBucket } from '../tabs.js';
 import { fnKey } from '../trace-graph.js';
 import { el, basename } from '../dom.js';
+import { effectBadges, hasAnyTag } from '../effect-badges.js';
+import { EFFECT_TAGS } from '../effects-config.js';
 
 const SORTS = [
   { id: 'name', label: 'Name' },
@@ -22,7 +24,31 @@ export function renderFunctions(onChange) {
     el('span', { text: ` — Flat, sortable list of every function in ${scope}. Click a function to see its source; click "trace" to follow what it calls.` }),
   ]));
   wrap.appendChild(toolbar(allFns.length, onChange));
+  wrap.appendChild(effectChips(onChange));
   wrap.appendChild(rowList(allFns, onChange));
+  return wrap;
+}
+
+function effectChips(onChange) {
+  const wrap = el('div', { cls: 'fn-fx-chips' });
+  for (const tag of EFFECT_TAGS) {
+    const on = STATE.fnEffectFilter.has(tag);
+    wrap.appendChild(el('button', {
+      cls: `fn-fx-chip effect-${tag}${on ? ' on' : ''}`,
+      type: 'button',
+      text: tag,
+      title: `Filter to functions with effect: ${tag}`,
+      on: { click: () => { toggleFnEffectFilter(tag); onChange(); } },
+    }));
+  }
+  if (STATE.fnEffectFilter.size) {
+    wrap.appendChild(el('button', {
+      cls: 'fn-fx-chip',
+      type: 'button',
+      text: 'clear',
+      on: { click: () => { STATE.fnEffectFilter.clear(); onChange(); } },
+    }));
+  }
   return wrap;
 }
 
@@ -32,7 +58,15 @@ function collectFns() {
     : STATE.files;
   const out = [];
   for (const f of filtered) for (const fn of f.fns) out.push({ ...fn, _file: f });
-  return sortFns(out, STATE.functionsSort);
+  const fx = STATE.fnEffectFilter;
+  const passEffect = fn => {
+    if (!fx.size) return true;
+    const e = STATE.effects.get(fnKey(fn));
+    if (!e) return false;
+    for (const t of fx) if (e.direct.has(t) || e.inherited.has(t)) return true;
+    return false;
+  };
+  return sortFns(out.filter(passEffect), STATE.functionsSort);
 }
 
 function sortFns(fns, mode) {
@@ -87,6 +121,14 @@ function row(fn, key, expanded, onChange) {
         selectPath(fn._file.path);
         onChange();
       },
+      contextmenu: e => {
+        e.preventDefault();
+        const role = STATE.paint.startKey ? 'end' : 'start';
+        if (!setPaintEndpoint(role, 'fn', key)) {
+          alert('Path painter is in file mode — clear the path to switch to fn mode.');
+        }
+        onChange();
+      },
     },
   });
   r.appendChild(el('span', { cls: 'sb-twirl', text: expanded ? '▾' : '▸' }));
@@ -94,6 +136,8 @@ function row(fn, key, expanded, onChange) {
   r.appendChild(el('span', { cls: 'fn-file', text: fn._file.name, title: fn._file.path }));
   r.appendChild(el('span', { cls: 'fn-lines', text: `${fn.lines}L` }));
   r.appendChild(el('span', { cls: `cx-badge cx-${cxBucket(fn.cx)}`, text: String(fn.cx) }));
+  const fxEntry = STATE.effects.get(key);
+  if (hasAnyTag(fxEntry)) r.appendChild(effectBadges(fxEntry));
   r.appendChild(el('button', {
     cls: 'fn-trace-btn', type: 'button', text: 'trace →',
     title: 'Trace this function in the call graph',

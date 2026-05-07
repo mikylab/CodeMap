@@ -3,6 +3,8 @@ import { cxBucket } from '../tabs.js';
 import { buildTraceTree, fnKey } from '../trace-graph.js';
 import { el, basename } from '../dom.js';
 import { renderTraceMap } from './trace-graph-view.js';
+import { effectBadges, hasAnyTag } from '../effect-badges.js';
+import { renderPaintStrip } from './paint-strip.js';
 
 let selectedKey = null;
 let cachedRootKey = null;
@@ -40,6 +42,8 @@ export function renderTrace(onChange) {
   const tree = cachedTree;
 
   const wrap = el('div', { cls: 'trace-root' });
+  const strip = renderPaintStrip(onChange);
+  if (strip) wrap.appendChild(strip);
   wrap.appendChild(breadcrumbs(onChange));
   wrap.appendChild(hint(root, tree));
   wrap.appendChild(body(tree, onChange));
@@ -205,6 +209,8 @@ function nodeDetail(selected, onChange) {
   title.appendChild(document.createTextNode(`${fn.name}()`));
   if (selected.cycle) title.appendChild(el('span', { cls: 'conf-badge conf-cycle', text: 'cycle' }));
   if (selected.ambiguous) title.appendChild(el('span', { cls: 'conf-badge conf-amb', text: 'ambiguous' }));
+  const fxEntry = STATE.effects.get(fnKey(fn));
+  if (hasAnyTag(fxEntry)) title.appendChild(effectBadges(fxEntry));
   wrap.appendChild(title);
 
   const meta = el('div', { cls: 'trace-fn-meta' });

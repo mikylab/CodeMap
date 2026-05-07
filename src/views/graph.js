@@ -1,5 +1,6 @@
-import { STATE, selectPath, setFileTraceRoot, gotoFileTraceHistory, toggleGraphDir, resetGraphView, zoomGraph, setGraphFilter, toggleGraphHideIsolated, clearGraphFocus, resetGraphCollapse, topClusterMap } from '../state.js';
+import { STATE, selectFile, gotoFileTraceHistory, toggleGraphDir, resetGraphView, zoomGraph, setGraphFilter, toggleGraphHideIsolated, clearGraphFocus, resetGraphCollapse, topClusterMap, setPaintEndpoint, exitFullscreen } from '../state.js';
 import { el, basename, alpha } from '../dom.js';
+import { renderPaintStrip, computePaint } from './paint-strip.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -10,6 +11,8 @@ export function renderGraphView(onChange) {
   const focusFile = focusPath ? STATE.byPath.get(focusPath) : null;
 
   const wrap = el('div', { cls: 'graph-root' });
+  const strip = renderPaintStrip(onChange);
+  if (strip) wrap.appendChild(strip);
   wrap.appendChild(breadcrumbs(onChange));
   wrap.appendChild(el('div', { cls: 'view-hint' }, [
     el('span', { cls: 'view-hint-name', text: 'Graph' }),
@@ -128,9 +131,11 @@ function countImportEdges() {
 }
 
 function currentRoot() {
+  // Prefer the user's explicit selection — fall back to the file-trace root
+  // (set on initial load) only when nothing is selected.
+  if (STATE.selectedPath && STATE.byPath.has(STATE.selectedPath)) return STATE.selectedPath;
   const r = STATE.fileTraceRoot;
   if (r && STATE.byPath.has(r)) return r;
-  if (STATE.selectedPath && STATE.byPath.has(STATE.selectedPath)) return STATE.selectedPath;
   return null;
 }
 
@@ -232,6 +237,10 @@ function graphCanvas(focusPath, onChange) {
   const focusIn = focusId ? (incoming.get(focusId) || new Set()) : null;
   const focused = focusId ? new Set([focusId, ...(focusOut || []), ...(focusIn || [])]) : null;
 
+  const paint = computePaint();
+  const paintActive = paint.mode !== 'none' && STATE.paint.kind === 'file';
+  const paintNodes = paintActive ? paint.nodes : null;
+
   const filter = (STATE.graphFilter || '').trim().toLowerCase();
   const matchedIds = filter
     ? new Set([...nodes.keys()].filter(id => {
@@ -294,7 +303,8 @@ function graphCanvas(focusPath, onChange) {
     const node = pos.node;
     const focusDim = focused && !focused.has(id);
     const filterDim = matchedIds && !matchedIds.has(id);
-    const dimmed = focusDim || filterDim;
+    const paintDim = paintNodes && !paintNodes.has(node.kind === 'file' ? node.file.path : id);
+    const dimmed = focusDim || filterDim || paintDim;
     const isMatch = !!(matchedIds && matchedIds.has(id));
     const isFocus = id === focusId;
     const g = document.createElementNS(SVG_NS, 'g');
@@ -352,8 +362,17 @@ function graphCanvas(focusPath, onChange) {
       const outN = outgoing.get(id).size, inN = incoming.get(id).size;
       title.textContent = `${f.path}\n${f.lang} · ${f.lineCount} lines · ${f.fns.length} fns\nimports ${outN} · imported by ${inN}\nclick: focus · double-click: open in trace`;
       g.appendChild(title);
-      g.addEventListener('click', (e) => { e.stopPropagation(); selectPath(f.path); setFileTraceRoot(f.path); onChange(); });
-      g.addEventListener('dblclick', (e) => { e.stopPropagation(); setFileTraceRoot(f.path); selectPath(f.path); onChange(); });
+      g.addEventListener('click', (e) => { e.stopPropagation(); selectFile(f.path); onChange(); });
+      g.addEventListener('dblclick', (e) => { e.stopPropagation(); selectFile(f.path); exitFullscreen(); onChange(); });
+      g.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const role = STATE.paint.startKey ? 'end' : 'start';
+        if (!setPaintEndpoint(role, 'file', f.path)) {
+          alert('Path painter is in fn mode — clear the path to switch to file mode.');
+        }
+        onChange();
+      });
     }
     ng.appendChild(g);
   }
@@ -497,7 +516,7 @@ function connRow(otherPath, dir, onChange) {
   const row = el('button', {
     cls: `graph-conn graph-conn-${dir}`, type: 'button',
     title: otherPath + '\nclick: focus this file',
-    on: { click: () => { setFileTraceRoot(otherPath); selectPath(otherPath); onChange(); } },
+    on: { click: () => { selectFile(otherPath); onChange(); } },
   });
   row.appendChild(el('span', { cls: 'graph-conn-name', text: basename(otherPath) }));
   row.appendChild(el('span', { cls: 'graph-conn-tag', text: dirOf(otherPath) || '/' }));
