@@ -179,7 +179,7 @@ function modeBody(sel, onChange) {
 // ---------- REPO modes ----------
 
 function summaryRepo(onChange) {
-  const wrap = el('div', { cls: 'ws-pad' });
+  const wrap = el('div', { cls: 'ws-pad ws-pad-wide' });
   wrap.appendChild(repoOverviewCard(onChange));
   wrap.appendChild(renderOverview());
   return wrap;
@@ -590,21 +590,33 @@ function smellList(smells, onChange, compact) {
 }
 
 function smellRow(s, onChange) {
-  const row = el('div', { cls: `ws-smell-row sev-${s.severity}` });
-  row.appendChild(el('span', { cls: 'ws-smell-icon', text: s.severity === 'warn' ? '⚠' : 'ℹ' }));
+  const hasDetail = !!(s.snippet || s.why);
+  const row = el('details', { cls: `ws-smell-row sev-${s.severity}` });
+  const summary = el('summary', { cls: 'ws-smell-summary' });
+  summary.appendChild(el('span', {
+    cls: 'ws-smell-caret',
+    text: hasDetail ? '▸' : '·',
+    attrs: hasDetail ? {} : { 'aria-hidden': 'true' },
+  }));
+  summary.appendChild(el('span', { cls: 'ws-smell-icon', text: s.severity === 'warn' ? '⚠' : 'ℹ' }));
   const main = el('div', { cls: 'ws-smell-main' });
   main.appendChild(el('div', { cls: 'ws-smell-head' }, [
     el('button', {
       cls: 'ws-smell-loc', type: 'button',
       text: `${basename(s.file)}:${s.line}`,
       title: `${s.file}:${s.line} — open file`,
-      on: { click: () => { selectFile(s.file); onChange(); } },
+      on: { click: e => { e.preventDefault(); e.stopPropagation(); selectFile(s.file); onChange(); } },
     }),
     el('span', { cls: 'ws-smell-kind', text: s.subkind ? `${s.kind}/${s.subkind}` : s.kind }),
   ]));
-  if (s.snippet) main.appendChild(el('div', { cls: 'ws-smell-snippet', text: s.snippet }));
-  if (s.why) main.appendChild(el('div', { cls: 'ws-smell-why', text: s.why }));
-  row.appendChild(main);
+  summary.appendChild(main);
+  row.appendChild(summary);
+  if (s.snippet) row.appendChild(el('div', { cls: 'ws-smell-snippet', text: s.snippet }));
+  if (s.why) row.appendChild(el('div', { cls: 'ws-smell-why', text: s.why }));
+  if (!hasDetail) {
+    summary.style.cursor = 'default';
+    summary.addEventListener('click', e => e.preventDefault());
+  }
   return row;
 }
 

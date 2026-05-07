@@ -4,6 +4,9 @@ All notable changes to Codemap are recorded here. Newest first.
 
 ## Unreleased
 
+- Toolbar logo now shows an icon and acts as a "back to repo overview" button on every page (including Walk, Graph, and Smells overlays).
+- Risk rows are collapsible — only the location/kind shows by default; click to expand snippet and rationale. Applies to both the workspace Risk view and the full-screen Smells overlay.
+- Repo overview uses the full workspace pane width instead of being capped at 1100px.
 - Stop tracking `docs/plans/`; only `docs/design.md` is versioned.
 - Add this changelog and reference it from the README.
 - Document the post-change workflow (commit message + changelog + docs) in `CLAUDE.md`.

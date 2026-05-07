@@ -1,11 +1,11 @@
-import { STATE, setFullscreen, toggleFnEffectFilter, toggleHelp } from './state.js';
+import { STATE, setFullscreen, toggleFnEffectFilter, toggleHelp, exitFullscreen, closeHelp, clearSelection } from './state.js';
 import { EFFECT_TAGS } from './effects-config.js';
 import { el, clear } from './dom.js';
 
 export function renderToolbar(onChange, onDropClick) {
   const root = document.getElementById('toolbar');
   clear(root);
-  root.appendChild(logo());
+  root.appendChild(logo(onChange));
   root.appendChild(modeButtons(onChange));
   root.appendChild(el('div', { cls: 'tb-spacer' }));
   if (STATE.files.length) {
@@ -27,11 +27,33 @@ function helpButton(onChange) {
   });
 }
 
-function logo() {
-  return el('div', { cls: 'tb-logo' }, [
-    el('span', { cls: 'tb-logo-name', text: 'codemap' }),
-    el('span', { cls: 'tb-logo-ver', text: 'v3' }),
-  ]);
+function logo(onChange) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('class', 'tb-logo-icon');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.innerHTML =
+    '<circle cx="6" cy="6" r="2.4" fill="currentColor"/>' +
+    '<circle cx="18" cy="6" r="2.4" fill="currentColor" opacity="0.55"/>' +
+    '<circle cx="6" cy="18" r="2.4" fill="currentColor" opacity="0.55"/>' +
+    '<circle cx="18" cy="18" r="2.4" fill="currentColor"/>' +
+    '<path d="M6 6 L18 18 M6 18 L18 6 M6 6 L6 18 M18 6 L18 18" ' +
+    'stroke="currentColor" stroke-width="1.2" opacity="0.45" fill="none"/>';
+  const btn = el('button', {
+    cls: 'tb-logo',
+    type: 'button',
+    title: 'Back to repo overview',
+    on: { click: () => {
+      clearSelection();
+      exitFullscreen();
+      closeHelp();
+      onChange();
+    } },
+  });
+  btn.appendChild(svg);
+  btn.appendChild(el('span', { cls: 'tb-logo-name', text: 'codemap' }));
+  btn.appendChild(el('span', { cls: 'tb-logo-ver', text: 'v3' }));
+  return btn;
 }
 
 function modeButtons(onChange) {

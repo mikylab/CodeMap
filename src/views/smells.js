@@ -92,20 +92,21 @@ function list(onChange) {
 }
 
 function item(f, onChange) {
-  const row = el('div', { cls: `smell-item smell-${f.severity}` });
-  const head = el('div', { cls: 'smell-head' });
+  const row = el('details', { cls: `smell-item smell-${f.severity}` });
+  const head = el('summary', { cls: 'smell-head' });
+  head.appendChild(el('span', { cls: 'smell-caret', text: '▸' }));
   head.appendChild(el('span', { cls: `smell-sev sev-${f.severity}`, text: f.severity === 'warn' ? '⚠' : 'ℹ' }));
   head.appendChild(el('span', { cls: 'smell-loc', text: `${f.file}:${f.line}` }));
   head.appendChild(el('span', { cls: 'smell-kind', text: `${f.kind}${f.subkind ? ' · ' + f.subkind : ''}` }));
+  head.appendChild(el('button', {
+    cls: 'smell-open', type: 'button', text: 'open file',
+    on: { click: e => { e.preventDefault(); e.stopPropagation(); selectFile(f.file); exitFullscreen(); onChange(); } },
+  }));
   row.appendChild(head);
-  row.appendChild(el('div', { cls: 'smell-snippet', text: f.snippet }));
+  if (f.snippet) row.appendChild(el('div', { cls: 'smell-snippet', text: f.snippet }));
   const why = el('div', { cls: 'smell-why' });
   why.appendChild(el('span', { text: f.why }));
   if (f.fnName) why.appendChild(el('span', { cls: 'smell-fn', text: ` · fn: ${f.fnName}` }));
-  why.appendChild(el('button', {
-    cls: 'smell-open', type: 'button', text: 'open file',
-    on: { click: () => { selectFile(f.file); exitFullscreen(); onChange(); } },
-  }));
   row.appendChild(why);
   return row;
 }
