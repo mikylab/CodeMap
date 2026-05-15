@@ -1152,6 +1152,8 @@ button, input, select { font: inherit; color: inherit; }
 }
 .tb-history-badge:hover { transform: translateY(-1px); }
 .tb-history-badge.active { background: var(--accent); color: #fff; }
+.tb-history-badge.empty { border-color: var(--muted); color: var(--muted); opacity: 0.75; }
+.tb-history-badge.empty:hover { opacity: 1; }
 
 /* ─── history view ────────────────────────────────────────────────────── */
 .history-root { display: flex; flex-direction: column; overflow-y: auto; }

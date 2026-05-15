@@ -11,8 +11,8 @@ export function renderToolbar(onChange, onDropClick) {
   if (STATE.files.length) {
     root.appendChild(effectChips(onChange));
     root.appendChild(smellBadge(onChange));
+    root.appendChild(historyBadge(onChange));
   }
-  if (hasGitStats()) root.appendChild(historyBadge(onChange));
   root.appendChild(projectBadge());
   root.appendChild(helpButton(onChange));
   root.appendChild(dropButton(onDropClick));
@@ -109,12 +109,17 @@ function smellBadge(onChange) {
 
 function historyBadge(onChange) {
   const active = STATE.fullscreen === 'history';
+  const loaded = hasGitStats();
   const n = Object.keys(STATE.gitStatsByPath).length;
+  const cls = 'tb-history-badge' + (loaded ? '' : ' empty') + (active ? ' active' : '');
+  const title = loaded
+    ? `${n} file${n === 1 ? '' : 's'} with git history — open History (4)`
+    : 'Drop a git log to enable history — open for instructions';
   return el('button', {
-    cls: 'tb-history-badge' + (active ? ' active' : ''),
+    cls,
     type: 'button',
-    text: `⏱ history`,
-    title: `${n} file${n === 1 ? '' : 's'} with git history — open History (4)`,
+    text: '⏱ history',
+    title,
     on: { click: () => { setFullscreen(active ? null : 'history'); onChange(); } },
   });
 }
