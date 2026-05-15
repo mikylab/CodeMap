@@ -2,13 +2,20 @@ import { STATE, hasGitStats, selectFile } from '../state.js';
 import { summarizeGitLog } from '../git-log.js';
 import { el, basename } from '../dom.js';
 
+let cachedSummary = null;
+let cachedFor = null;
+
 export function renderHistory(onChange) {
   const wrap = el('div', { cls: 'history-root' });
   if (!hasGitStats()) {
     wrap.appendChild(splash());
     return wrap;
   }
-  const summary = summarizeGitLog(STATE.gitCommits);
+  if (cachedFor !== STATE.gitCommits) {
+    cachedSummary = summarizeGitLog(STATE.gitCommits);
+    cachedFor = STATE.gitCommits;
+  }
+  const summary = cachedSummary;
   wrap.appendChild(el('div', { cls: 'view-hint' }, [
     el('span', { cls: 'view-hint-name', text: 'History' }),
     el('span', { text: ' — Commits, authors, and churn from the git log you dropped. Click a file row to open it in the workspace.' }),

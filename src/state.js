@@ -75,7 +75,7 @@ export function setGitStats(byPath, commits, ingestedAt = Date.now()) {
 }
 
 export function hasGitStats() {
-  return !!STATE.gitLogIngestedAt && Object.keys(STATE.gitStatsByPath).length > 0;
+  return !!STATE.gitLogIngestedAt;
 }
 
 // `traceRoot` is derived from history rather than stored — single source of truth.

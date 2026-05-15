@@ -53,6 +53,7 @@ async function readFileItem(file, prefix, out, skipped, ctx) {
   if (file.size > MAX_BYTES) { noteTooLarge(skipped, path, file.size); return; }
   const src = await file.text();
   if (looksLikeGitLog(src)) { ctx.gitLog = parseGitLog(src); return; }
+  // Named like a git-log but content didn't match — don't try to parse as source.
   if (namedLog) return;
   const parsed = parseFile(file.name, src, path);
   if (parsed) out.push(parsed);
