@@ -1,4 +1,4 @@
-import { STATE, setFullscreen, toggleFnEffectFilter, toggleHelp, exitFullscreen, closeHelp, clearSelection } from './state.js';
+import { STATE, hasGitStats, setFullscreen, toggleFnEffectFilter, toggleHelp, exitFullscreen, closeHelp, clearSelection } from './state.js';
 import { EFFECT_TAGS } from './effects-config.js';
 import { el, clear } from './dom.js';
 
@@ -12,6 +12,7 @@ export function renderToolbar(onChange, onDropClick) {
     root.appendChild(effectChips(onChange));
     root.appendChild(smellBadge(onChange));
   }
+  if (hasGitStats()) root.appendChild(historyBadge(onChange));
   root.appendChild(projectBadge());
   root.appendChild(helpButton(onChange));
   root.appendChild(dropButton(onDropClick));
@@ -103,6 +104,18 @@ function smellBadge(onChange) {
     text: label,
     title: total ? `${warns} warn, ${total - warns} info — open Smells` : 'No smells detected',
     on: { click: () => { setFullscreen(active ? null : 'smells'); onChange(); } },
+  });
+}
+
+function historyBadge(onChange) {
+  const active = STATE.fullscreen === 'history';
+  const n = Object.keys(STATE.gitStatsByPath).length;
+  return el('button', {
+    cls: 'tb-history-badge' + (active ? ' active' : ''),
+    type: 'button',
+    text: `⏱ history`,
+    title: `${n} file${n === 1 ? '' : 's'} with git history — open History (4)`,
+    on: { click: () => { setFullscreen(active ? null : 'history'); onChange(); } },
   });
 }
 

@@ -60,10 +60,23 @@ export const STATE = {
   // workspace UI
   selectedFnKey: null,            // when set, detail pane is in fn mode
   detailMode: 'summary',          // sticky: summary | source | calls | risk | deps
-  fullscreen: null,               // null | 'walk' | 'graph' | 'smells'
+  fullscreen: null,               // null | 'walk' | 'graph' | 'smells' | 'history'
   navSearch: '',                  // search box in navigator
   helpOpen: false,                // glossary panel
+  gitStatsByPath: {},
+  gitCommits: [],
+  gitLogIngestedAt: null,
 };
+
+export function setGitStats(byPath, commits, ingestedAt = Date.now()) {
+  STATE.gitStatsByPath = byPath || {};
+  STATE.gitCommits = commits || [];
+  STATE.gitLogIngestedAt = byPath ? ingestedAt : null;
+}
+
+export function hasGitStats() {
+  return !!STATE.gitLogIngestedAt && Object.keys(STATE.gitStatsByPath).length > 0;
+}
 
 // `traceRoot` is derived from history rather than stored — single source of truth.
 export function getTraceRoot() {

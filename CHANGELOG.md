@@ -4,6 +4,7 @@ All notable changes to Codemap are recorded here. Newest first.
 
 ## Unreleased
 
+- Add **History** overlay: drop a `git log --numstat` export alongside the repo to see commits, authors, monthly activity, and most-churned files. Toolbar shows an `⏱ history` button when stats are loaded; press `4` to toggle.
 - Toolbar logo now shows an icon and acts as a "back to repo overview" button on every page (including Walk, Graph, and Smells overlays).
 - Risk rows are collapsible — only the location/kind shows by default; click to expand snippet and rationale. Applies to both the workspace Risk view and the full-screen Smells overlay.
 - Repo overview uses the full workspace pane width instead of being capped at 1100px.

@@ -1144,6 +1144,78 @@ button, input, select { font: inherit; color: inherit; }
 .tb-smell-badge.active.none { background: var(--success); color: #fff; }
 .tb-smell-badge:hover { transform: translateY(-1px); }
 
+.tb-history-badge {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+  padding: 6px 12px; border-radius: 6px;
+  border: 1px solid var(--accent); background: var(--bg);
+  color: var(--accent); cursor: pointer; transition: all 0.12s;
+}
+.tb-history-badge:hover { transform: translateY(-1px); }
+.tb-history-badge.active { background: var(--accent); color: #fff; }
+
+/* ─── history view ────────────────────────────────────────────────────── */
+.history-root { display: flex; flex-direction: column; overflow-y: auto; }
+.history-cmd {
+  font-family: var(--font-mono); font-size: 10px;
+  background: var(--bg2); border: 0.5px solid var(--border2);
+  border-radius: 4px; padding: 6px 8px; margin: 8px 0 0;
+  white-space: pre-wrap; word-break: break-all;
+}
+.history-strip {
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
+  background: var(--bg);
+  border-bottom: 0.5px solid var(--border2);
+}
+.history-stat {
+  padding: 10px 14px;
+  border-right: 0.5px solid var(--border);
+  min-width: 0;
+}
+.history-stat:last-child { border-right: none; }
+.history-stat-val {
+  font-family: var(--font-mono); font-size: 16px; font-weight: 500; color: var(--text);
+  line-height: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.history-stat-lbl {
+  font-family: var(--font-mono); font-size: 9px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.07em; margin-top: 4px;
+}
+.history-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 10px; padding: 12px;
+}
+.history-card { min-width: 0; }
+.history-spark {
+  display: flex; align-items: flex-end; gap: 2px;
+  height: 100px; padding: 4px 0;
+}
+.history-spark-bar {
+  flex: 1; min-width: 2px;
+  background: var(--accent); border-radius: 1px;
+}
+.history-clickable { cursor: pointer; border-radius: 3px; padding: 1px 3px; }
+.history-clickable:hover { background: var(--bg2); }
+.history-commits { display: flex; flex-direction: column; }
+.history-commit {
+  display: grid;
+  grid-template-columns: 70px 56px 1fr 110px;
+  gap: 8px; align-items: center;
+  padding: 4px 0;
+  border-bottom: 0.5px solid var(--border);
+  font-family: var(--font-mono); font-size: 11px;
+}
+.history-commit:last-child { border-bottom: none; }
+.history-commit-date { color: var(--muted); font-size: 10px; }
+.history-commit-hash { color: var(--accent); }
+.history-commit-subj {
+  color: var(--text); min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.history-commit-author {
+  color: var(--muted); font-size: 10px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 /* ─── navigator search & home ─────────────────────────────────────────── */
 .sb-home {
   font-family: var(--font-mono); font-size: 11px; font-weight: 500;
