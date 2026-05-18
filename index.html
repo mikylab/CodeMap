@@ -30,6 +30,7 @@
     import { analyze } from './src/analyzer.js';
     import { renderAll } from './src/renderer.js';
     import { mark, measure } from './src/perf.js';
+    import { openGitModal } from './src/git-modal.js';
 
     const overlay = document.getElementById('drop-overlay');
     const picker = document.getElementById('dir-picker');
@@ -37,13 +38,22 @@
 
     function showOverlay(v) { overlay.style.display = v ? 'flex' : 'none'; }
 
+    let lastRepoMeta = null;
+
     function renderWarnings() {
+      const parts = [];
+      if (lastRepoMeta) {
+        const m = lastRepoMeta;
+        parts.push(`Loaded ${m.host}.com/${m.owner}/${m.repo}@${m.ref} — ${m.fetched}/${m.totalBlobs} files${m.truncated ? ' (capped)' : ''}`);
+      }
       const big = STATE.skipped.tooLargeCount;
-      if (!big) { warnbar.hidden = true; warnbar.textContent = ''; return; }
-      const example = STATE.skipped.tooLarge[0];
-      const more = big > 1 ? ` (+${big - 1} more)` : '';
-      warnbar.textContent =
-        `Skipped ${big} file${big === 1 ? '' : 's'} > 2MB — e.g. ${example.path}${more}`;
+      if (big) {
+        const example = STATE.skipped.tooLarge[0];
+        const more = big > 1 ? ` (+${big - 1} more)` : '';
+        parts.push(`Skipped ${big} file${big === 1 ? '' : 's'} > 2MB — e.g. ${example.path}${more}`);
+      }
+      if (!parts.length) { warnbar.hidden = true; warnbar.textContent = ''; return; }
+      warnbar.textContent = parts.join('  ·  ');
       warnbar.hidden = false;
     }
 
@@ -67,7 +77,15 @@
       e.preventDefault();
       showOverlay(false);
       const { files, skipped } = await ingestFromDrop(e.dataTransfer);
+      lastRepoMeta = null;
       ingestComplete(files, skipped);
+    });
+
+    document.addEventListener('codemap:open-url-loader', () => {
+      openGitModal(({ files, skipped, meta }) => {
+        lastRepoMeta = meta;
+        ingestComplete(files, skipped);
+      });
     });
 
     picker.addEventListener('change', async e => {
@@ -82,6 +100,7 @@
       }));
       const out = parsed.filter(Boolean);
       measure('ingest(picker)', t0, `parsed=${out.length}`);
+      lastRepoMeta = null;
       ingestComplete(out, skipped);
     });
 

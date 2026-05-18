@@ -2,7 +2,7 @@ import { STATE, setFullscreen, toggleFnEffectFilter, toggleHelp, exitFullscreen,
 import { EFFECT_TAGS } from './effects-config.js';
 import { el, clear } from './dom.js';
 
-export function renderToolbar(onChange, onDropClick) {
+export function renderToolbar(onChange, onDropClick, onUrlClick) {
   const root = document.getElementById('toolbar');
   clear(root);
   root.appendChild(logo(onChange));
@@ -14,6 +14,7 @@ export function renderToolbar(onChange, onDropClick) {
   }
   root.appendChild(projectBadge());
   root.appendChild(helpButton(onChange));
+  root.appendChild(urlButton(onUrlClick));
   root.appendChild(dropButton(onDropClick));
 }
 
@@ -114,6 +115,14 @@ function projectBadge() {
 function dropButton(onClick) {
   return el('button', {
     cls: 'tb-drop', type: 'button', text: 'Drop repo / files',
+    on: { click: onClick },
+  });
+}
+
+function urlButton(onClick) {
+  return el('button', {
+    cls: 'tb-url', type: 'button', text: 'Load URL',
+    title: 'Load a GitHub or GitLab repo by URL',
     on: { click: onClick },
   });
 }
