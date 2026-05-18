@@ -149,6 +149,9 @@ export const BUILTINS = {
     // language globals
     'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'String', 'Number', 'Boolean',
     'Array', 'Object', 'Date', 'RegExp', 'Error', 'Promise', 'Symbol', 'Map', 'Set',
+    // Builtin error constructors (thrown bare, no import needed)
+    'TypeError', 'RangeError', 'SyntaxError', 'ReferenceError', 'EvalError',
+    'URIError', 'AggregateError',
     'WeakMap', 'WeakSet', 'JSON', 'Math', 'console', 'setTimeout', 'setInterval',
     'clearTimeout', 'clearInterval', 'queueMicrotask', 'structuredClone',
     'encodeURIComponent', 'decodeURIComponent', 'encodeURI', 'decodeURI',
@@ -178,6 +181,20 @@ export const BUILTINS = {
     'keys', 'values', 'items', 'get', 'setdefault', 'join', 'split', 'strip',
     'lower', 'upper', 'startswith', 'endswith', 'replace', 'find', 'index',
     'count', 'encode', 'decode',
+    // Builtin exceptions (raised bare, no import needed)
+    'Exception', 'BaseException', 'ValueError', 'TypeError', 'KeyError',
+    'IndexError', 'AttributeError', 'RuntimeError', 'StopIteration',
+    'StopAsyncIteration', 'NotImplementedError', 'FileNotFoundError',
+    'FileExistsError', 'IsADirectoryError', 'NotADirectoryError',
+    'PermissionError', 'OSError', 'IOError', 'EOFError', 'ImportError',
+    'ModuleNotFoundError', 'LookupError', 'ArithmeticError', 'ZeroDivisionError',
+    'OverflowError', 'FloatingPointError', 'AssertionError', 'NameError',
+    'UnboundLocalError', 'RecursionError', 'MemoryError', 'SystemError',
+    'SystemExit', 'KeyboardInterrupt', 'GeneratorExit', 'ConnectionError',
+    'ConnectionRefusedError', 'ConnectionResetError', 'ConnectionAbortedError',
+    'BrokenPipeError', 'TimeoutError', 'UnicodeError', 'UnicodeDecodeError',
+    'UnicodeEncodeError', 'Warning', 'DeprecationWarning', 'UserWarning',
+    'FutureWarning', 'ResourceWarning',
   ]),
   go: new Set([
     'len', 'cap', 'make', 'new', 'append', 'copy', 'delete', 'panic', 'recover',

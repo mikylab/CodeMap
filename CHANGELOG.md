@@ -4,6 +4,7 @@ All notable changes to Codemap are recorded here. Newest first.
 
 ## Unreleased
 
+- Parser now harvests function parameter names from signatures (including Go receiver-style `func (recv) Name(args)` and JS arrow / destructured forms) and excludes them from the call-name set, so framework-injected params like Starlette's `call_next` or Express's `next` no longer surface as `unresolved-call` false positives.
 - Load a GitHub or GitLab repo straight from a URL via the new toolbar "Load URL" button. Fetching happens client-side against the host's REST API; optional personal access token raises GitHub's 60/hr anonymous limit to 5000/hr (token kept in `sessionStorage` only). Capped at 500 files per repo to keep parsing under the documented perf target.
 - Toolbar logo now shows an icon and acts as a "back to repo overview" button on every page (including Walk, Graph, and Smells overlays).
 - Risk rows are collapsible — only the location/kind shows by default; click to expand snippet and rationale. Applies to both the workspace Risk view and the full-screen Smells overlay.

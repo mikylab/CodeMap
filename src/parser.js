@@ -3,7 +3,7 @@ import { LANG_CONFIG } from './lang-config.js';
 const KEYWORDS = new Set('if for while switch return class import export const let var def function async await new try catch finally else do break continue in of'.split(' '));
 const CALL_EXCLUDE = new Set([
   ...KEYWORDS,
-  ...'typeof instanceof sizeof match throw yield super self this print puts println printf lambda fn struct enum impl mod use defer go synchronized assert raise pass'.split(' '),
+  ...'typeof instanceof sizeof match throw yield super self this print puts println printf lambda fn struct enum impl mod use defer go synchronized assert raise pass and or not is del global nonlocal with as from'.split(' '),
 ]);
 const CALL_RE = /\b([A-Za-z_]\w*)\s*\(/g;
 const SKIP_DIRS = new Set('node_modules .git dist build .next __pycache__ .venv venv env coverage .cache'.split(' '));
@@ -25,13 +25,14 @@ export function parseFile(name, src, path) {
   if (!cfg) return null;
 
   const newlines = newlineIndices(src);
-  const fns = extractFns(src, cfg, path, newlines);
+  const ext = extOf(name);
+  const fns = extractFns(src, cfg, path, newlines, ext);
   const imports = extractImports(src, cfg, path);
-  const localImports = extractLocalImports(src, cfg, extOf(name));
+  const localImports = extractLocalImports(src, cfg, ext);
   const cx = clamp((1 + decisionCount(src)) / Math.max(fns.length, 1), 1, 30);
 
   return {
-    name, path, ext: extOf(name),
+    name, path, ext,
     lang: cfg.name, langColor: cfg.color,
     lineCount: newlines.length + 1,
     fns, imports, localImports, cx,
@@ -55,24 +56,100 @@ function forEachMatch(src, regexes, cb) {
   }
 }
 
-function extractFns(src, cfg, path, newlines) {
+function extractFns(src, cfg, path, newlines, ext) {
   const out = [];
   forEachMatch(src, cfg.fn, (name, idx) => {
     if (name.length < 2 || KEYWORDS.has(name)) return;
     const body = bodyAt(src, idx);
+    const callText = stripNoise(body.text, ext);
+    const params = extractParams(src, idx);
     out.push({
       name, file: path,
       lineNum: lineFor(newlines, idx),
       lines: body.lines,
       cx: clamp(decisionCount(body.text) || 1, 1, 30),
-      calls: extractCalls(body.text, name),
+      calls: extractCalls(callText, name, params),
     });
   });
   return out;
 }
 
-function extractCalls(bodyText, ownName) {
+// Pull identifier names from the signature's parameter list(s) so that
+// framework-injected params (Starlette's `call_next`, Express's `next`, etc.)
+// aren't reported as unresolved calls when invoked inside the body. We scan up
+// to two paren groups after `idx` so Go's `func (recv) Name(args)` form picks
+// up both the receiver and the real params.
+function extractParams(src, idx) {
+  const out = [];
+  let cursor = idx;
+  for (let pass = 0; pass < 2; pass++) {
+    const open = src.indexOf('(', cursor);
+    if (open < 0 || open - cursor > 300) break;
+    let depth = 0, end = -1;
+    for (let i = open; i < src.length && i - open < 4000; i++) {
+      const c = src[i];
+      if (c === '(') depth++;
+      else if (c === ')') { depth--; if (depth === 0) { end = i; break; } }
+    }
+    if (end < 0) break;
+    const inner = src.slice(open + 1, end);
+    let buf = '', d = 0;
+    const flush = () => {
+      let p = buf.trim().replace(/^(\*+|\.{3})/, '').trim();
+      buf = '';
+      if (!p) return;
+      if (p.startsWith('{') || p.startsWith('[')) {
+        const ids = p.match(/[A-Za-z_]\w*/g) || [];
+        for (const id of ids) out.push(id);
+        return;
+      }
+      const m = p.match(/^([A-Za-z_]\w*)/);
+      if (m) out.push(m[1]);
+    };
+    for (let i = 0; i < inner.length; i++) {
+      const c = inner[i];
+      if (c === '(' || c === '[' || c === '{') d++;
+      else if (c === ')' || c === ']' || c === '}') d--;
+      else if (c === ',' && d === 0) { flush(); continue; }
+      buf += c;
+    }
+    flush();
+    cursor = end + 1;
+  }
+  return out;
+}
+
+// Strip strings/comments before call extraction so words inside docstrings
+// (e.g., `"...start (Monday) and end (Sunday)..."`) don't get matched by the
+// `name(` regex and surface as unresolved-call false positives.
+function stripNoise(text, ext) {
+  if (ext === 'py') {
+    return text
+      // Closed triple-quoted strings (docstrings + multi-line literals).
+      .replace(/("""|''')[\s\S]*?\1/g, '')
+      // Unclosed triple-quote: `bodyAt` stops at the first blank line, which
+      // can land inside a multi-line docstring. Strip from the opening delim
+      // to end of the slice so the docstring's prose can't leak into the
+      // call extractor.
+      .replace(/("""|''')[\s\S]*$/g, '')
+      // Single- and double-quoted strings (single line). Words inside
+      // `print("TEST: topic detection (no LLM)")` were matching as calls.
+      .replace(/"(?:\\[\s\S]|[^"\\\n])*"/g, '""')
+      .replace(/'(?:\\[\s\S]|[^'\\\n])*'/g, "''")
+      .replace(/(^|[^\\])#[^\n]*/g, '$1');
+  }
+  if (ext === 'js' || ext === 'mjs' || ext === 'cjs' || ext === 'ts' || ext === 'tsx' || ext === 'jsx') {
+    return text
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:\\])\/\/[^\n]*/g, '$1')
+      .replace(/`(?:\\[\s\S]|[^`\\])*`/g, '``');
+  }
+  return text;
+}
+
+function extractCalls(bodyText, ownName, params) {
   const out = new Set();
+  const paramSet = params && params.length ? new Set(params) : null;
   CALL_RE.lastIndex = 0;
   let m;
   while ((m = CALL_RE.exec(bodyText)) !== null) {
@@ -80,6 +157,12 @@ function extractCalls(bodyText, ownName) {
     if (name.length < 2) continue;
     if (name === ownName) continue;
     if (CALL_EXCLUDE.has(name)) continue;
+    if (paramSet && paramSet.has(name)) continue;
+    // Skip method calls (`obj.foo(`, `obj?.foo(`). We can't resolve the
+    // receiver's type from regex, so flagging these as unresolved is a false
+    // positive. Free-function calls remain in scope.
+    const prev = bodyText[m.index - 1];
+    if (prev === '.' || (prev === '?' && bodyText[m.index - 2] === '.')) continue;
     out.add(name);
   }
   return [...out].sort();

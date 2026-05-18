@@ -24,6 +24,36 @@ test('smells: unresolved-call flagged for hallucinated name', () => {
     `expected validateToken; got ${JSON.stringify(out)}`);
 });
 
+test('smells: function parameter not flagged as unresolved call', () => {
+  const state = buildState([{
+    name: 'a.py', path: 'a.py',
+    src: `async def rate_limit_middleware(request, call_next):\n    return await call_next(request)\n`,
+  }]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'unresolved-call' && h.subkind === 'call_next'),
+    `call_next is a parameter; should not be unresolved`);
+});
+
+test('smells: JS arrow param not flagged', () => {
+  const state = buildState([{
+    name: 'a.js', path: 'a.js',
+    src: `const wrap = (handler) => {\n  return handler(42);\n};\n`,
+  }]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'unresolved-call' && h.subkind === 'handler'),
+    `handler is a parameter; should not be unresolved`);
+});
+
+test('smells: Go receiver-style params not flagged', () => {
+  const state = buildState([{
+    name: 'a.go', path: 'a.go',
+    src: `func (s *Server) Handle(next Handler) error {\n  return next()\n}\n`,
+  }]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'unresolved-call' && h.subkind === 'next'),
+    `next is a parameter; should not be unresolved`);
+});
+
 test('smells: builtin Math.floor not flagged', () => {
   const state = buildState([{
     name: 'a.js', path: 'a.js',

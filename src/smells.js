@@ -392,7 +392,12 @@ const PLACEHOLDERS = [
   { kind: 'env-stub',   re: /['"`]YOUR_[A-Z_]+['"`]/g, sev: 'warn' },
   { kind: 'lorem',      re: /['"`](?:foo|bar|baz|test123|asdf|xxx)['"`]/gi, sev: 'warn' },
   { kind: 'todo-str',   re: /['"`]TODO[^'"`]*['"`]/g, sev: 'warn' },
-  { kind: 'magic-port', re: /\b(?:3000|3001|5000|8000|8080|8888|9000)\b/g, sev: 'info' },
+  // Require port-like context: a `port`/`listen`/`bind` identifier followed by
+  // `=`, `:`, or `(` within ~20 chars of the number. The bare-number form was
+  // a false-positive magnet (`latency_ms < 5000`, `range(3000)`, timeouts in
+  // ms). URL forms like `"http://localhost:5000"` are already handled by the
+  // `localhost` placeholder rule above.
+  { kind: 'magic-port', re: /\b(?:port|listen|bind)\b[^\n=]{0,20}[:=(]\s*(?:3000|3001|5000|8000|8080|8888|9000)\b/gi, sev: 'info' },
 ];
 
 function detectPlaceholders(file, _stripped, out) {
