@@ -22,6 +22,14 @@ Then open:
 Drag a folder onto the page — or click **Drop repo / files** to use the directory
 picker. Files are read locally; nothing leaves your machine.
 
+You can also click **Load URL** and paste a `github.com/owner/repo` or
+`gitlab.com/group/repo` URL (with optional `/tree/branch` suffix). Codemap
+fetches the tree and raw files directly from the host's public REST API — no
+proxy or backend. GitHub anonymous calls are capped at 60/hr per IP; paste a
+personal access token in the modal to raise that to 5000/hr (token is kept in
+`sessionStorage` only, never sent anywhere else). Loads are capped at 500
+files per repo.
+
 ## Workspace
 
 Codemap is a single two-pane workspace, not a stack of tabs.
@@ -150,6 +158,8 @@ CodeMap/
 │   ├── walker.js           # generateWalk(state) → WalkStep[]
 │   ├── trace-graph.js      # buildTraceTree(rootFn, callsByFn, fnByKey)
 │   ├── ingest.js           # drag-drop / dir-picker → ParsedFile[]
+│   ├── git-fetch.js        # GitHub / GitLab URL → ParsedFile[] (CORS, no server)
+│   ├── git-modal.js        # "Load URL" modal UI
 │   ├── state.js            # STATE singleton + mutators + indexes
 │   ├── tabs.js             # complexity buckets, stdlib set
 │   ├── renderer.js         # workspace dispatcher (renderAll)

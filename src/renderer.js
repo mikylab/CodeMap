@@ -8,7 +8,11 @@ import { renderHelp } from './views/help.js';
 import { clear } from './dom.js';
 
 export function renderAll() {
-  renderToolbar(renderAll, () => document.getElementById('dir-picker')?.click());
+  renderToolbar(
+    renderAll,
+    () => document.getElementById('dir-picker')?.click(),
+    () => document.dispatchEvent(new CustomEvent('codemap:open-url-loader')),
+  );
   renderNavigator(renderAll);
   renderStatBar();
   renderWorkspaceShell();
