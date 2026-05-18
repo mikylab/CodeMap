@@ -1,6 +1,7 @@
 import { shouldSkipPath, parseFile } from './parser.js';
 import { newSkipped, noteTooLarge, MAX_BYTES } from './ingest.js';
 import { mark, measure } from './perf.js';
+import { basename } from './dom.js';
 
 const CONCURRENCY = 8;
 export const DEFAULT_MAX_FILES = 500;
@@ -70,17 +71,20 @@ export async function fetchRepo(spec, opts = {}) {
     ? await ghTree(spec, meta.ref, token)
     : await glTree(spec, meta.id, meta.ref, token);
 
-  // Filter to blobs under the subpath, skip the standard ignore list, drop binaries by extension
   const subPrefix = (spec.subpath || '').replace(/^\/+|\/+$/g, '');
-  const filtered = allEntries
-    .filter(e => e.type === 'blob')
-    .map(e => ({ path: e.path, size: e.size ?? 0 }))
-    .filter(e => !subPrefix || e.path === subPrefix || e.path.startsWith(subPrefix + '/'))
-    .filter(e => !shouldSkipPath(e.path));
+  const inSubpath = p => !subPrefix || p === subPrefix || p.startsWith(subPrefix + '/');
+  const filtered = [];
+  for (const e of allEntries) {
+    if (e.type !== 'blob') continue;
+    if (!inSubpath(e.path)) continue;
+    if (shouldSkipPath(e.path)) continue;
+    filtered.push({ path: e.path, size: e.size ?? 0 });
+  }
 
   const truncated = filtered.length > maxFiles;
   const taken = truncated ? filtered.slice(0, maxFiles) : filtered;
 
+  const reportProgress = throttleProgress(onProgress);
   onProgress({ phase: 'files', total: taken.length, done: 0 });
 
   const skipped = newSkipped();
@@ -93,17 +97,15 @@ export async function fetchRepo(spec, opts = {}) {
     } else {
       try {
         const src = spec.host === 'github'
-          ? await ghBlob(spec, meta.ref, entry.path, token)
+          ? await ghBlob(spec, meta.ref, entry.path)
           : await glBlob(meta.id, meta.ref, entry.path, token);
         if (src.length > MAX_BYTES) {
           noteTooLarge(skipped, entry.path, src.length);
         } else {
-          const name = entry.path.split('/').pop();
-          // Strip the subpath prefix so the displayed paths are repo-root-relative to the loaded folder
           const displayPath = subPrefix && entry.path.startsWith(subPrefix + '/')
             ? entry.path.slice(subPrefix.length + 1)
             : entry.path;
-          const parsed = parseFile(name, src, displayPath);
+          const parsed = parseFile(basename(entry.path), src, displayPath);
           if (parsed) out.push(parsed);
           else skipped.unsupported++;
         }
@@ -113,9 +115,10 @@ export async function fetchRepo(spec, opts = {}) {
       }
     }
     done++;
-    onProgress({ phase: 'files', total: taken.length, done });
+    reportProgress({ phase: 'files', total: taken.length, done });
   });
 
+  onProgress({ phase: 'files', total: taken.length, done });
   measure('git-fetch', t0, `host=${spec.host} files=${out.length} truncated=${truncated}`);
   return {
     files: out,
@@ -150,11 +153,10 @@ async function ghTree({ owner, repo }, ref, token) {
   return j.tree || [];
 }
 
-async function ghBlob({ owner, repo }, ref, path, token) {
-  // raw.githubusercontent.com is CORS-friendly and doesn't burn the API rate limit
+async function ghBlob({ owner, repo }, ref, path) {
+  // raw.githubusercontent.com is CORS-friendly, anonymous, and doesn't burn the API rate limit
   const url = `https://raw.githubusercontent.com/${owner}/${repo}/${encodeURIComponent(ref)}/${path.split('/').map(encodeURIComponent).join('/')}`;
-  const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-  const r = await fetch(url, { headers });
+  const r = await fetch(url);
   if (!r.ok) throw new Error(`raw blob ${path}: ${r.status}`);
   return r.text();
 }
@@ -175,9 +177,6 @@ async function glMeta({ owner, repo, ref }, token) {
 async function glTree(spec, projectId, ref, token) {
   const out = [];
   const headers = glHeaders(token);
-  // GitLab paginates; follow the link header until no next page.
-  let url = `https://gitlab.com/api/v4/projects/${projectId}/repository/tree?recursive=true&per_page=100&ref=${encodeURIComponent(ref)}&pagination=keyset`;
-  // Keyset pagination uses link headers; fall back to offset if unsupported.
   for (let page = 1; page <= 50; page++) {
     const r = await fetch(`https://gitlab.com/api/v4/projects/${projectId}/repository/tree?recursive=true&per_page=100&page=${page}&ref=${encodeURIComponent(ref)}`, { headers });
     if (!r.ok) throw new Error(`GitLab tree: ${r.status} ${r.statusText}`);
@@ -196,6 +195,16 @@ async function glBlob(projectId, ref, path, token) {
 }
 
 // ─── Utility ──────────────────────────────────────────────────────────────
+function throttleProgress(fn, intervalMs = 80) {
+  let last = 0;
+  return event => {
+    const now = performance.now();
+    if (now - last < intervalMs) return;
+    last = now;
+    fn(event);
+  };
+}
+
 async function runWithConcurrency(items, n, worker) {
   let i = 0;
   const runners = Array.from({ length: Math.min(n, items.length) }, async () => {

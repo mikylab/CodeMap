@@ -1,7 +1,7 @@
-import { el, clear } from './dom.js';
+import { el } from './dom.js';
 import { parseRepoUrl, fetchRepo, DEFAULT_MAX_FILES } from './git-fetch.js';
 
-const LS_TOKEN_KEY = 'codemap.gh.token';
+const TOKEN_STORAGE_KEY = 'codemap.gh.token';
 
 export function openGitModal(onLoaded) {
   const existing = document.getElementById('git-modal');
@@ -20,7 +20,7 @@ export function openGitModal(onLoaded) {
     type: 'password',
     placeholder: 'Optional access token (raises GitHub limit to 5000/hr)',
     attrs: { autocomplete: 'off', spellcheck: 'false' },
-    value: sessionStorage.getItem(LS_TOKEN_KEY) || '',
+    value: sessionStorage.getItem(TOKEN_STORAGE_KEY) || '',
   });
   const status = el('div', { cls: 'gm-status', text: ' ' });
   const loadBtn = el('button', { cls: 'gm-load', type: 'button', text: 'Load' });
@@ -43,7 +43,7 @@ export function openGitModal(onLoaded) {
     const spec = parseRepoUrl(urlInput.value);
     if (!spec) { setStatus('Enter a github.com/<owner>/<repo> or gitlab.com/... URL.', 'err'); return; }
     const token = tokenInput.value.trim();
-    if (token) sessionStorage.setItem(LS_TOKEN_KEY, token);
+    if (token) sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
     state.busy = true;
     loadBtn.disabled = true; cancelBtn.disabled = true;
     urlInput.disabled = true; tokenInput.disabled = true;
