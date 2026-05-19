@@ -137,7 +137,8 @@ function resolveLocalImport(importerPath, spec, byPath) {
   const dir = importerPath.includes('/') ? importerPath.slice(0, importerPath.lastIndexOf('/')) : '';
   const candidates = [];
   if (spec.startsWith('.') || spec.startsWith('/')) {
-    candidates.push(normPath(dir ? dir + '/' + spec : spec));
+    const rel = normalizeRelSpec(spec);
+    candidates.push(normPath(dir ? dir + '/' + rel : rel));
   } else {
     // Package-style dotted spec (Python "pkg.mod", Java "com.foo.Bar"). Try as
     // a path from the repo root, then from every ancestor dir of the importer
@@ -175,4 +176,17 @@ function normPath(p) {
     else if (seg && seg !== '.') parts.push(seg);
   }
   return parts.join('/');
+}
+
+// Python relative imports use leading dots as level markers, not path
+// segments: one dot = the importer's own package, N dots = (N-1) levels up,
+// and remaining dots are submodule separators. ".core" -> "./core",
+// "..pkg.mod" -> "./../pkg/mod", "." -> "./". Path-style specs (containing a
+// "/", e.g. JS "./core" or "../util") are returned unchanged.
+function normalizeRelSpec(spec) {
+  if (spec.includes('/')) return spec;
+  const m = /^(\.+)([\w.]*)$/.exec(spec);
+  if (!m) return spec;
+  const up = '../'.repeat(m[1].length - 1);
+  return './' + up + m[2].replace(/\./g, '/');
 }

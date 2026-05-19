@@ -3,7 +3,7 @@ import { LANG_CONFIG } from './lang-config.js';
 const KEYWORDS = new Set('if for while switch return class import export const let var def function async await new try catch finally else do break continue in of'.split(' '));
 const CALL_EXCLUDE = new Set([
   ...KEYWORDS,
-  ...'typeof instanceof sizeof match throw yield super self this print puts println printf lambda fn struct enum impl mod use defer go synchronized assert raise pass and or not is del global nonlocal with as from'.split(' '),
+  ...'typeof instanceof sizeof match throw yield super self this print puts println printf lambda fn struct enum impl mod use defer go synchronized assert raise pass and or not is del global nonlocal with as from except elif'.split(' '),
 ]);
 const CALL_RE = /\b([A-Za-z_]\w*)\s*\(/g;
 const SKIP_DIRS = new Set('node_modules .git dist build .next __pycache__ .venv venv env coverage .cache'.split(' '));
@@ -58,7 +58,13 @@ function forEachMatch(src, regexes, cb) {
 
 function extractFns(src, cfg, path, newlines, ext) {
   const out = [];
-  forEachMatch(src, cfg.fn, (name, idx) => {
+  // Match fn/class regexes against a copy with string + comment contents blanked
+  // (length-preserving, newlines kept) so docstring prose can't yield phantom
+  // definitions — e.g. `class\s+(\w+)` reaching across a blank line into a
+  // module docstring ("...Experiment class\n\nOne Experiment = ...") and
+  // capturing "One". Bodies are still sliced from the real source.
+  const masked = maskLiterals(src, ext);
+  forEachMatch(masked, cfg.fn, (name, idx) => {
     if (name.length < 2 || KEYWORDS.has(name)) return;
     const body = bodyAt(src, idx);
     const callText = stripNoise(body.text, ext);
@@ -145,6 +151,51 @@ function stripNoise(text, ext) {
       .replace(/`(?:\\[\s\S]|[^`\\])*`/g, '``');
   }
   return text;
+}
+
+// Length-preserving mask of string literals and comments: their contents become
+// spaces, but the text length and every newline are preserved so byte offsets
+// and line numbers still line up with the original source. Used before
+// structural (fn/class) regex matching so prose inside docstrings, comments, and
+// string literals can't be mistaken for code.
+function maskLiterals(src, ext) {
+  const py = ext === 'py';
+  const jsFam = ext === 'js' || ext === 'mjs' || ext === 'cjs' ||
+                ext === 'ts' || ext === 'tsx' || ext === 'jsx' ||
+                ext === 'vue' || ext === 'svelte';
+  if (!py && !jsFam) return src;
+  const out = src.split('');
+  const n = src.length;
+  const blank = (a, b) => { for (let i = a; i < b && i < n; i++) if (out[i] !== '\n') out[i] = ' '; };
+  let i = 0;
+  while (i < n) {
+    const c = src[i];
+    if (py && c === '#') { let j = i; while (j < n && src[j] !== '\n') j++; blank(i, j); i = j; continue; }
+    if (jsFam && c === '/' && src[i + 1] === '/') { let j = i; while (j < n && src[j] !== '\n') j++; blank(i, j); i = j; continue; }
+    if (jsFam && c === '/' && src[i + 1] === '*') {
+      let j = i + 2; while (j < n && !(src[j] === '*' && src[j + 1] === '/')) j++;
+      j = Math.min(j + 2, n); blank(i, j); i = j; continue;
+    }
+    if (py && (c === '"' || c === "'") && src[i + 1] === c && src[i + 2] === c) {
+      const q = c; let j = i + 3;
+      while (j < n && !(src[j] === q && src[j + 1] === q && src[j + 2] === q)) j++;
+      j = Math.min(j + 3, n); blank(i, j); i = j; continue;
+    }
+    if (c === '"' || c === "'" || (jsFam && c === '`')) {
+      const q = c; let j = i + 1;
+      while (j < n && src[j] !== q) {
+        if (src[j] === '\\') j += 2;
+        else if (src[j] === '\n' && q !== '`') break;
+        else j++;
+      }
+      const closed = src[j] === q;
+      blank(i, closed ? j + 1 : j);
+      i = closed ? j + 1 : j;
+      continue;
+    }
+    i++;
+  }
+  return out.join('');
 }
 
 function extractCalls(bodyText, ownName, params) {

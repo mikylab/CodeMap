@@ -134,6 +134,69 @@ test('smells: Python pass-only except is empty-catch', () => {
   assertTrue(out.some(h => h.kind === 'empty-catch'));
 });
 
+test('smells: Python narrow except (specific types) is info, not warn', () => {
+  // EAFP fallback idiom: try int / except (ValueError, TypeError): pass / try float
+  const state = buildState([{
+    name: 'a.py', path: 'a.py',
+    src: `def _coerce(v):\n    try:\n        return int(v)\n    except (ValueError, TypeError):\n        pass\n    return v\n`,
+  }]);
+  const out = detectSmells(state);
+  const hit = out.find(h => h.kind === 'empty-catch' && h.file === 'a.py');
+  assertTrue(!!hit, `expected an empty-catch finding; got ${JSON.stringify(out)}`);
+  assertEqual(hit.subkind, 'narrow');
+  assertEqual(hit.severity, 'info');
+});
+
+test('smells: Python broad except Exception stays warn', () => {
+  const state = buildState([{
+    name: 'a.py', path: 'a.py',
+    src: `def f():\n    try:\n        do()\n    except Exception:\n        pass\n`,
+  }]);
+  const out = detectSmells(state);
+  const hit = out.find(h => h.kind === 'empty-catch' && h.file === 'a.py');
+  assertTrue(!!hit, 'expected an empty-catch finding');
+  assertEqual(hit.subkind, 'empty');
+  assertEqual(hit.severity, 'warn');
+});
+
+test('smells: Python relative import of sibling package NOT flagged', () => {
+  // from .core import X  in pkg/__init__.py  ->  pkg/core/__init__.py
+  const state = buildState([
+    { name: '__init__.py', path: 'pkg/__init__.py',
+      src: `from .core import Experiment, finish_experiment\n` },
+    { name: '__init__.py', path: 'pkg/core/__init__.py',
+      src: `from .db import finish_experiment\nclass Experiment: pass\n` },
+    { name: 'db.py', path: 'pkg/core/db.py',
+      src: `def finish_experiment(): pass\n` },
+  ]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'broken-import' && h.file === 'pkg/__init__.py'),
+    `.core resolves to pkg/core/__init__.py; got ${JSON.stringify(findKind(out, 'broken-import'))}`);
+});
+
+test('smells: Python relative import of sibling module NOT flagged', () => {
+  // from .notebook import x  in pkg/__init__.py  ->  pkg/notebook.py
+  const state = buildState([
+    { name: '__init__.py', path: 'pkg/__init__.py',
+      src: `from .notebook import load_ipython_extension as _load\n` },
+    { name: 'notebook.py', path: 'pkg/notebook.py',
+      src: `def load_ipython_extension(ip): pass\n` },
+  ]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'broken-import' && h.file === 'pkg/__init__.py'),
+    `.notebook resolves to pkg/notebook.py; got ${JSON.stringify(findKind(out, 'broken-import'))}`);
+});
+
+test('smells: Python relative import that truly resolves to nothing IS flagged', () => {
+  const state = buildState([
+    { name: '__init__.py', path: 'pkg/__init__.py',
+      src: `from .nonexistent import thing\n` },
+  ]);
+  const out = detectSmells(state);
+  assertTrue(out.some(h => h.kind === 'broken-import' && h.file === 'pkg/__init__.py'),
+    `.nonexistent has no target and should be flagged`);
+});
+
 test('smells: deterministic & sorted', () => {
   const state = buildState([{
     name: 'b.js', path: 'b.js',

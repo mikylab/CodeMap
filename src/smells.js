@@ -288,6 +288,7 @@ const RESOLVE_EXTS = ['js', 'jsx', 'ts', 'tsx', 'py', 'rb', 'go', 'rs', 'java'];
 
 function resolveSpec(importerPath, spec, byPath) {
   const dir = importerPath.includes('/') ? importerPath.slice(0, importerPath.lastIndexOf('/')) : '';
+  spec = normalizeRelSpec(spec);
   const joined = normPath(dir ? dir + '/' + spec : spec);
   if (byPath.has(joined)) return joined;
   for (const ext of RESOLVE_EXTS) if (byPath.has(`${joined}.${ext}`)) return `${joined}.${ext}`;
@@ -303,6 +304,19 @@ function normPath(p) {
     else if (seg && seg !== '.') parts.push(seg);
   }
   return parts.join('/');
+}
+
+// Python relative imports use leading dots as level markers, not path
+// segments: one dot = the importer's own package, N dots = (N-1) levels up,
+// and remaining dots are submodule separators. ".core" -> "./core",
+// "..pkg.mod" -> "./../pkg/mod", "." -> "./". Path-style specs (containing a
+// "/", e.g. JS "./core" or "../util") are returned unchanged.
+function normalizeRelSpec(spec) {
+  if (spec.includes('/')) return spec;
+  const m = /^(\.+)([\w.]*)$/.exec(spec);
+  if (!m) return spec;
+  const up = '../'.repeat(m[1].length - 1);
+  return './' + up + m[2].replace(/\./g, '/');
 }
 
 // --- 3. suspicious comments -------------------------------------------------
@@ -368,21 +382,47 @@ function detectEmptyCatches(file, family, out) {
     const line = lineFor(file.src, m.index);
     const snippet = snippetAt(file.src, m.index);
     let subkind = 'empty';
+    let severity = 'warn';
+    let why = 'caught error is swallowed without handling';
     if (/return\s+(?:null|undefined|None)/.test(m[0])) subkind = 'return-null';
     else if (/console\.(log|error|warn)/.test(m[0])) subkind = 'log-only';
     else if (family === 'go') subkind = 'err-swallow';
+    // A Python `except` that names specific exception types — not bare
+    // `except:` and not the catch-alls `Exception`/`BaseException` — is a
+    // deliberate, narrow handling decision, typically the EAFP fallback idiom
+    // (`try int / except (ValueError, TypeError): pass / try float`). Surface
+    // it for visibility, but as info rather than a warn-level false alarm.
+    if (family === 'py' && isNarrowExcept(m[0])) {
+      subkind = 'narrow';
+      severity = 'info';
+      why = 'narrowly-scoped exception caught and ignored (likely intentional fallback)';
+    }
     out.push({
       id: makeId(file.path, line, 'empty-catch', snippet),
       kind: 'empty-catch',
       subkind,
-      severity: 'warn',
+      severity,
       file: file.path,
       line,
       fnName: fnAtLine(file, line),
       snippet,
-      why: 'caught error is swallowed without handling',
+      why,
     });
   }
+}
+
+// True when a Python `except` clause names specific exception types rather than
+// catching broadly. Bare `except:`, `except Exception[...]`, and
+// `except BaseException[...]` are broad (kept at warn). Anything else — e.g.
+// `except (ValueError, TypeError):` — is narrow.
+function isNarrowExcept(matchText) {
+  const colon = matchText.indexOf(':');
+  if (colon < 0) return false;
+  const clause = matchText.slice(matchText.indexOf('except') + 6, colon)
+    .trim().replace(/^\(/, '').replace(/\)$/, '').trim();
+  if (!clause) return false;                          // bare `except:`
+  if (/^(Exception|BaseException)\b/.test(clause)) return false; // catch-all
+  return true;
 }
 
 // --- 5. magic placeholders -------------------------------------------------

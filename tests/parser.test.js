@@ -48,6 +48,24 @@ test('ts: import keyword false positive', () => {
   assertEqual(out.fns.length, 0);
 });
 
+test('python: docstring prose does not create phantom functions', () => {
+  // `class\s+(\w+)` must not reach across the blank line into the docstring:
+  // "...Experiment class\n\nOne Experiment = ..." once created a fn named "One".
+  const src = `"""\nmod.py — Experiment class\n\nOne Experiment = one run.\nCaptures: params, git state (branch + diff).\n"""\ndef real_fn():\n    return 1\n`;
+  const out = parseFile('experiment.py', src, 'core/experiment.py');
+  const names = out.fns.map(f => f.name);
+  assertDeepEqual(names, ['real_fn']);
+  // ...and no phantom "state(" call leaks out of the imagined function body.
+  assertFalse(out.fns.some(f => (f.calls || []).includes('state')));
+});
+
+test('python: except keyword not captured as a call', () => {
+  const src = `def f():\n    try:\n        return int(v)\n    except (KeyError, TypeError) as e:\n        return None\n`;
+  const out = parseFile('a.py', src, 'a.py');
+  const allCalls = out.fns.flatMap(f => f.calls || []);
+  assertFalse(allCalls.includes('except'));
+});
+
 test('go: extracts func names', () => {
   const src = `package main\nfunc main() {}\nfunc (s *S) Greet() {}\n`;
   const out = parseFile('m.go', src, 'm.go');
