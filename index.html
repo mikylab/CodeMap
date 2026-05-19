@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Codemap</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="root">
+    <div id="toolbar" class="toolbar"></div>
+    <div class="layout">
+      <aside id="navigator" class="navigator"></aside>
+      <main class="main">
+        <div id="statbar" class="statbar"></div>
+        <div id="warnbar" class="warnbar" hidden></div>
+        <div id="workspace" class="workspace"></div>
+        <div id="drop-overlay" class="drop-overlay">
+          <div class="drop-msg">Drop folder to parse</div>
+        </div>
+      </main>
+    </div>
+    <div id="fullscreen" class="fullscreen" style="display:none"></div>
+    <div id="help-panel" class="help-panel" style="display:none"></div>
+  </div>
+  <input id="dir-picker" type="file" webkitdirectory multiple style="display:none" />
+  <script type="module">
+    import { ingestFromDrop, newSkipped, noteTooLarge, MAX_BYTES } from './src/ingest.js';
+    import { parseFile } from './src/parser.js';
+    import { setFiles, setSkipped, setReadme, exitFullscreen, setFullscreen, toggleHelp, closeHelp, goBack, STATE } from './src/state.js';
+    import { analyze } from './src/analyzer.js';
+    import { renderAll } from './src/renderer.js';
+    import { mark, measure } from './src/perf.js';
+    import { openGitModal } from './src/git-modal.js';
+
+    const overlay = document.getElementById('drop-overlay');
+    const picker = document.getElementById('dir-picker');
+    const warnbar = document.getElementById('warnbar');
+
+    function showOverlay(v) { overlay.style.display = v ? 'flex' : 'none'; }
+
+    let lastRepoMeta = null;
+
+    function renderWarnings() {
+      const parts = [];
+      if (lastRepoMeta) {
+        const m = lastRepoMeta;
+        parts.push(`Loaded ${m.host}.com/${m.owner}/${m.repo}@${m.ref} — ${m.fetched}/${m.totalBlobs} files${m.truncated ? ' (capped)' : ''}`);
+      }
+      const big = STATE.skipped.tooLargeCount;
+      if (big) {
+        const example = STATE.skipped.tooLarge[0];
+        const more = big > 1 ? ` (+${big - 1} more)` : '';
+        parts.push(`Skipped ${big} file${big === 1 ? '' : 's'} > 2MB — e.g. ${example.path}${more}`);
+      }
+      if (!parts.length) { warnbar.hidden = true; warnbar.textContent = ''; return; }
+      warnbar.textContent = parts.join('  ·  ');
+      warnbar.hidden = false;
+    }
+
+    function ingestComplete(files, skipped, readme) {
+      const t0 = mark();
+      const analysis = analyze(files);
+      setFiles(files, analysis);
+      setSkipped(skipped);
+      setReadme(readme);
+      renderWarnings();
+      renderAll();
+      measure('renderAll', t0);
+    }
+
+    document.body.addEventListener('dragenter', e => { e.preventDefault(); showOverlay(true); });
+    document.body.addEventListener('dragover',  e => { e.preventDefault(); });
+    document.body.addEventListener('dragleave', e => {
+      if (e.relatedTarget && document.body.contains(e.relatedTarget)) return;
+      showOverlay(false);
+    });
+    document.body.addEventListener('drop', async e => {
+      e.preventDefault();
+      showOverlay(false);
+      const { files, skipped, readme } = await ingestFromDrop(e.dataTransfer);
+      lastRepoMeta = null;
+      ingestComplete(files, skipped, readme);
+    });
+
+    document.addEventListener('codemap:open-url-loader', () => {
+      openGitModal(({ files, skipped, meta }) => {
+        lastRepoMeta = meta;
+        ingestComplete(files, skipped);
+      });
+    });
+
+    picker.addEventListener('change', async e => {
+      const skipped = newSkipped();
+      const t0 = mark();
+      let readme = null;
+      const README_NAMES = ['readme.md', 'readme', 'readme.txt'];
+      const parsed = await Promise.all([...e.target.files].map(async f => {
+        const path = f.webkitRelativePath || f.name;
+        // Root README only — repo-root means the path's first segment IS the file name
+        // (no nested dirs above) OR the relativePath splits to exactly two segments
+        // (rootDir/README.*) which is the picker's typical shape for a folder pick.
+        const segs = path.split('/');
+        const isRootReadme = (segs.length <= 2) && README_NAMES.includes(f.name.toLowerCase());
+        if (isRootReadme) {
+          if (f.size <= MAX_BYTES) readme = { name: f.name, raw: await f.text() };
+          return null;
+        }
+        if (f.size > MAX_BYTES) { noteTooLarge(skipped, path, f.size); return null; }
+        const p = parseFile(f.name, await f.text(), path);
+        if (!p) skipped.unsupported++;
+        return p;
+      }));
+      const out = parsed.filter(Boolean);
+      measure('ingest(picker)', t0, `parsed=${out.length}`);
+      lastRepoMeta = null;
+      ingestComplete(out, skipped, readme);
+    });
+
+    document.addEventListener('keydown', e => {
+      if (e.target.matches('input, textarea, select, [contenteditable]')) return;
+
+      // Back: Backspace or Alt+ArrowLeft
+      if ((e.key === 'Backspace' && !e.metaKey && !e.ctrlKey && !e.altKey) ||
+          (e.altKey && e.key === 'ArrowLeft')) {
+        if (STATE.history.length) { e.preventDefault(); goBack(); renderAll(); return; }
+      }
+
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      // Esc — close help, then exit fullscreen
+      if (e.key === 'Escape') {
+        if (STATE.helpOpen)        { e.preventDefault(); closeHelp();       renderAll(); return; }
+        if (STATE.fullscreen)      { e.preventDefault(); exitFullscreen();  renderAll(); return; }
+      }
+
+      if (e.key === 'h' || e.key === '?') { e.preventDefault(); toggleHelp(); renderAll(); return; }
+
+      // 1=Walk overlay, 2=Graph overlay, 3=Smells overlay
+      if (e.key === '1') { e.preventDefault(); setFullscreen(STATE.fullscreen === 'walk'   ? null : 'walk');   renderAll(); return; }
+      if (e.key === '2') { e.preventDefault(); setFullscreen(STATE.fullscreen === 'graph'  ? null : 'graph');  renderAll(); return; }
+      if (e.key === '3') { e.preventDefault(); setFullscreen(STATE.fullscreen === 'smells' ? null : 'smells'); renderAll(); return; }
+    });
+
+    document.getElementById('help-panel').addEventListener('click', e => {
+      if (e.target.id === 'help-panel') { closeHelp(); renderAll(); }
+    });
+
+    renderAll();
+  </script>
+</body>
+</html>
