@@ -1,6 +1,7 @@
 import { STATE, setFullscreen, toggleFnEffectFilter, toggleHelp, exitFullscreen, closeHelp, clearSelection } from './state.js';
 import { EFFECT_TAGS } from './effects-config.js';
 import { el, clear } from './dom.js';
+import { VERSION } from './version.js';
 
 export function renderToolbar(onChange, onDropClick, onUrlClick) {
   const root = document.getElementById('toolbar');
@@ -53,7 +54,7 @@ function logo(onChange) {
   });
   btn.appendChild(svg);
   btn.appendChild(el('span', { cls: 'tb-logo-name', text: 'codemap' }));
-  btn.appendChild(el('span', { cls: 'tb-logo-ver', text: 'v3' }));
+  btn.appendChild(el('span', { cls: 'tb-logo-ver', text: 'v' + VERSION }));
   return btn;
 }
 

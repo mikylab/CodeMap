@@ -4,6 +4,8 @@ All notable changes to Codemap are recorded here. Newest first.
 
 ## Unreleased
 
+- meta: add `package.json` (v3.0.0) and `src/version.js` so the public release has a canonical version. Toolbar logo now reads from `VERSION` instead of the hardcoded `v3`.
+- docs: `CLAUDE.md` post-change workflow now requires a SemVer bump (kept in sync between `package.json` and `src/version.js`), describes how to cut a release section in the changelog, and hardens the commit-message rule against any mention of Claude / AI / LLMs / Co-Authored-By.
 - ui: the workspace breadcrumb now ends with a non-navigating "you are here" chip for the current file/function, so the trail reads start → … → here even though the current node isn't in history.
 - ui: README panel reworked — the section label and expand/collapse toggle sit in a sticky header, and the expanded body scrolls within a capped height, so you can collapse a long README without scrolling back to find the control. Body now renders in a proportional font for easier reading.
 - Function/class detection now runs against a literal-masked copy of the source (string and comment contents blanked, length and line numbers preserved), so docstring and comment prose can no longer produce phantom definitions. Fixes a case where `class\s+(\w+)` reached across a blank line into a module docstring (`…Experiment class` then `One Experiment = …`) and invented a function `One`, which in turn produced a phantom `state` `unresolved-call`.
