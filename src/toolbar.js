@@ -1,4 +1,7 @@
-import { STATE, setFullscreen, toggleFnEffectFilter, toggleHelp, exitFullscreen, closeHelp, clearSelection } from './state.js';
+import {
+  STATE, setFullscreen, toggleFnEffectFilter, toggleHelp, exitFullscreen, closeHelp,
+  clearSelection,
+} from './state.js';
 import { EFFECT_TAGS } from './effects-config.js';
 import { el, clear } from './dom.js';
 import { VERSION } from './version.js';
@@ -61,17 +64,21 @@ function logo(onChange) {
 function modeButtons(onChange) {
   const wrap = el('div', { cls: 'tb-modes' });
   const items = [
-    { id: 'walk',   label: '🗺  Walk',   title: 'Open the guided walkthrough' },
-    { id: 'graph',  label: '◉  Graph',  title: 'Open the dependency graph' },
+    { id: 'walk',    label: '🗺  Walk',    title: 'Open the guided walkthrough', needsFiles: true },
+    { id: 'graph',   label: '◉  Graph',   title: 'Open the dependency graph', needsFiles: true },
+    { id: 'lineage', label: '🌳  Lineage', title: 'Open the branch-lineage tree (parsed from README)', needsLineage: true },
+    { id: 'docs',    label: '📄  Docs',    title: 'Browse captured markdown docs', needsDocs: true },
   ];
   for (const it of items) {
+    if (it.needsLineage && !STATE.lineage) continue;
+    if (it.needsDocs && !STATE.docs.length) continue;
     const active = STATE.fullscreen === it.id;
     wrap.appendChild(el('button', {
       cls: `tb-mode${active ? ' active' : ''}`,
       type: 'button',
       text: it.label,
       title: it.title,
-      disabled: !STATE.files.length,
+      disabled: it.needsFiles && !STATE.files.length,
       on: { click: () => { setFullscreen(active ? null : it.id); onChange(); } },
     }));
   }

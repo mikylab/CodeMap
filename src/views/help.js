@@ -65,7 +65,7 @@ export function renderHelp(onChange) {
   ]));
 
   card.appendChild(section('Keyboard', [
-    item('1 / 2 / 3', 'Toggle Walk / Graph / Smells overlays.'),
+    item('1 / 2 / 3 / 4', 'Toggle Walk / Graph / Smells / Lineage overlays (Lineage active when a README "### Branch lineage" section is found).'),
     item('Esc', 'Exit any overlay or close help.'),
     item('h or ?', 'Toggle this help panel.'),
   ]));

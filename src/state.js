@@ -21,6 +21,14 @@ export const STATE = {
   fnByKey: new Map(),
   selectedPath: null,
   readme: null,                    // { name, raw } | null
+  docs: [],                        // [{ name, path, raw }]
+  docsExpanded: false,             // navigator Docs group collapsed by default
+  docsPickerQuery: '',             // filter text in the fullscreen Docs picker
+  selectedDoc: null,               // path of currently-rendered doc | null
+  lineage: null,                   // { source, docPath, nodes: LineageNode[] } | null
+  selectedLineageBranch: null,     // branch name | null
+  lastRepoMeta: null,              // { host, owner, repo, ref, ... } | null — set after a git-URL load
+  pendingHashParts: null,          // { file?, fn?, doc? } — hash fields applyHash couldn't resolve; preserved by serializeState so unresolved shared links survive renderAll
   edges: [],
   degree: new Map(),
   libToPaths: new Map(),
@@ -64,7 +72,7 @@ export const STATE = {
   // workspace UI
   selectedFnKey: null,            // when set, detail pane is in fn mode
   detailMode: 'summary',          // sticky: summary | source | calls | risk | deps
-  fullscreen: null,               // null | 'walk' | 'graph' | 'smells'
+  fullscreen: null,               // null | 'walk' | 'graph' | 'smells' | 'lineage'
   navSearch: '',                  // search box in navigator
   helpOpen: false,                // glossary panel
   history: [],                    // [{kind, path?, fnKey?, mode}, ...] cap 20
@@ -100,6 +108,10 @@ export function setFiles(files, analysis = EMPTY_ANALYSIS) {
   STATE.smellsFileFilter = null;
   STATE.history = [];
   STATE.readme = null;
+  STATE.docs = [];
+  STATE.selectedDoc = null;
+  STATE.lineage = null;
+  STATE.selectedLineageBranch = null;
   STATE.sourceAnnot = new Map();
   STATE.flowByFn = new Map();
   STATE.paint = { kind: null, startKey: null, endKey: null, direction: 'forward' };
@@ -369,21 +381,38 @@ export function closeHelp() { STATE.helpOpen = false; }
 export function selectFile(path) {
   STATE.selectedPath = path || null;
   STATE.selectedFnKey = null;
+  STATE.selectedDoc = null;
   if (path) expandAncestors(path);
 }
 export function selectFn(fn) {
   if (!fn) { STATE.selectedFnKey = null; return; }
   STATE.selectedPath = fn.file;
   STATE.selectedFnKey = fnKey(fn);
+  STATE.selectedDoc = null;
   expandAncestors(fn.file);
 }
 export function clearSelection() {
   STATE.selectedPath = null;
   STATE.selectedFnKey = null;
+  STATE.selectedDoc = null;
 }
 export function setFunctionsSort(s) { STATE.functionsSort = s; }
 export function setSkipped(s) { STATE.skipped = s || newSkipped(); }
 export function setReadme(readme) { STATE.readme = readme || null; }
+export function setDocs(docs) { STATE.docs = Array.isArray(docs) ? docs : []; }
+export function setLineage(lineage) { STATE.lineage = lineage || null; }
+export function setLastRepoMeta(meta) { STATE.lastRepoMeta = meta || null; }
+export function setPendingHashParts(parts) { STATE.pendingHashParts = parts && Object.keys(parts).length ? parts : null; }
+export function setSelectedLineageBranch(name) { STATE.selectedLineageBranch = name || null; }
+export function selectDoc(path) {
+  STATE.selectedDoc = path || null;
+  STATE.selectedPath = null;
+  STATE.selectedFnKey = null;
+}
+export function clearSelectedDoc() { STATE.selectedDoc = null; }
+export function setDocsExpanded(v) { STATE.docsExpanded = !!v; }
+export function toggleDocsExpanded() { STATE.docsExpanded = !STATE.docsExpanded; }
+export function setDocsPickerQuery(q) { STATE.docsPickerQuery = q || ''; }
 
 export function visibleFiles() {
   const filter = STATE.sidebarFilter.toLowerCase();
@@ -407,7 +436,8 @@ const HISTORY_CAP = 20;
 function snapshotsEqual(a, b) {
   if (!a || !b) return false;
   return a.kind === b.kind && a.path === b.path
-      && a.fnKey === b.fnKey && a.mode === b.mode;
+      && a.fnKey === b.fnKey && a.docPath === b.docPath
+      && a.mode === b.mode;
 }
 
 export function pushHistory(snap) {
@@ -428,6 +458,7 @@ export function clearHistory() {
 }
 
 export function captureSnapshot() {
+  if (STATE.selectedDoc) return { kind: 'doc', docPath: STATE.selectedDoc };
   if (STATE.selectedFnKey) return { kind: 'fn', fnKey: STATE.selectedFnKey, mode: STATE.detailMode };
   if (STATE.selectedPath) return { kind: 'file', path: STATE.selectedPath, mode: STATE.detailMode };
   return { kind: 'repo', mode: STATE.detailMode };
@@ -437,6 +468,8 @@ export function restoreSnapshot(snap) {
   if (!snap) return;
   if (snap.kind === 'repo') {
     clearSelection();
+  } else if (snap.kind === 'doc') {
+    selectDoc(snap.docPath);
   } else if (snap.kind === 'file') {
     selectFile(snap.path);
   } else if (snap.kind === 'fn') {

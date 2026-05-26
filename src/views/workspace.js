@@ -12,6 +12,7 @@ import { attachSourcePopover } from './source-popover.js';
 import { renderFlow } from './flow-view.js';
 import { renderOverview } from './overview.js';
 import { smellExportBar } from '../smells-export.js';
+import { renderDoc } from '../doc-render.js';
 
 // Modes available depend on the kind of selection.
 const FILE_MODES = ['summary', 'source', 'calls', 'risk', 'deps'];
@@ -20,6 +21,10 @@ const REPO_MODES = ['summary', 'risk', 'deps'];
 
 export function renderWorkspace(onChange) {
   const root = el('div', { cls: 'ws-root' });
+  if (STATE.selectedDoc) {
+    const doc = STATE.docs.find(d => d.path === STATE.selectedDoc);
+    if (doc) { root.appendChild(renderDoc(doc, onChange)); return root; }
+  }
   if (!STATE.files.length) {
     root.appendChild(splash());
     return root;
@@ -69,6 +74,7 @@ function breadcrumb(onChange) {
 
 function labelForSnap(snap) {
   if (snap.kind === 'repo') return '⌂ Repo';
+  if (snap.kind === 'doc')  return `📄 ${basename(snap.docPath)}`;
   if (snap.kind === 'file') return basename(snap.path);
   if (snap.kind === 'fn') {
     const fn = STATE.fnByKey.get(snap.fnKey);

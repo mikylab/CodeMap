@@ -24,13 +24,17 @@
   </div>
   <input id="dir-picker" type="file" webkitdirectory multiple style="display:none" />
   <script type="module">
-    import { ingestFromDrop, newSkipped, noteTooLarge, MAX_BYTES } from './src/ingest.js';
+    import { ingestFromDrop, newSkipped, noteTooLarge, MAX_BYTES, isDocPath } from './src/ingest.js';
     import { parseFile } from './src/parser.js';
-    import { setFiles, setSkipped, setReadme, exitFullscreen, setFullscreen, toggleHelp, closeHelp, goBack, STATE } from './src/state.js';
+    import { setFiles, setSkipped, setReadme, setDocs, setLineage, setLastRepoMeta, exitFullscreen, setFullscreen, toggleHelp, closeHelp, goBack, STATE } from './src/state.js';
     import { analyze } from './src/analyzer.js';
     import { renderAll } from './src/renderer.js';
     import { mark, measure } from './src/perf.js';
     import { openGitModal } from './src/git-modal.js';
+    import { parseLineage } from './src/lineage.js';
+    import { enrichLineageFromGitHub } from './src/lineage-github.js';
+    import { installHashSync, writeHash, applyHash, repoFromHash } from './src/hash-state.js';
+    import { parseRepoUrl, fetchRepo } from './src/git-fetch.js';
 
     const overlay = document.getElementById('drop-overlay');
     const picker = document.getElementById('dir-picker');
@@ -38,12 +42,10 @@
 
     function showOverlay(v) { overlay.style.display = v ? 'flex' : 'none'; }
 
-    let lastRepoMeta = null;
-
     function renderWarnings() {
       const parts = [];
-      if (lastRepoMeta) {
-        const m = lastRepoMeta;
+      if (STATE.lastRepoMeta) {
+        const m = STATE.lastRepoMeta;
         parts.push(`Loaded ${m.host}.com/${m.owner}/${m.repo}@${m.ref} — ${m.fetched}/${m.totalBlobs} files${m.truncated ? ' (capped)' : ''}`);
       }
       const big = STATE.skipped.tooLargeCount;
@@ -57,15 +59,25 @@
       warnbar.hidden = false;
     }
 
-    function ingestComplete(files, skipped, readme) {
+    function ingestComplete(files, skipped, readme, docs) {
       const t0 = mark();
       const analysis = analyze(files);
       setFiles(files, analysis);
       setSkipped(skipped);
       setReadme(readme);
+      setDocs(docs || []);
+      const lineage = parseLineage(STATE.docs);
+      setLineage(lineage);
       renderWarnings();
+      applyHash(location.hash);
       renderAll();
       measure('renderAll', t0);
+      // Best-effort GitHub branch enrichment when we know the repo origin.
+      if (lineage && STATE.lastRepoMeta && STATE.lastRepoMeta.host === 'github') {
+        enrichLineageFromGitHub(lineage, STATE.lastRepoMeta).then(changed => {
+          if (changed) { setLineage(lineage); renderAll(); }
+        }).catch(err => console.warn('codemap: lineage enrichment failed', err));
+      }
     }
 
     document.body.addEventListener('dragenter', e => { e.preventDefault(); showOverlay(true); });
@@ -77,32 +89,61 @@
     document.body.addEventListener('drop', async e => {
       e.preventDefault();
       showOverlay(false);
-      const { files, skipped, readme } = await ingestFromDrop(e.dataTransfer);
-      lastRepoMeta = null;
-      ingestComplete(files, skipped, readme);
+      const { files, skipped, readme, docs } = await ingestFromDrop(e.dataTransfer);
+      setLastRepoMeta(null);
+      ingestComplete(files, skipped, readme, docs);
     });
 
     document.addEventListener('codemap:open-url-loader', () => {
-      openGitModal(({ files, skipped, meta }) => {
-        lastRepoMeta = meta;
-        ingestComplete(files, skipped);
+      openGitModal(({ files, skipped, meta, readme, docs }) => {
+        setLastRepoMeta(meta);
+        ingestComplete(files, skipped, readme, docs);
       });
     });
+
+    // Bootstrap from URL hash on initial load. If repo= is present, auto-fetch
+    // and then apply the remaining hash fields. Otherwise, just register the
+    // hashchange listener — there's nothing to restore until data is loaded.
+    installHashSync(() => renderAll());
+    (async function bootstrap() {
+      const repo = repoFromHash(location.hash);
+      if (!repo) return;
+      try {
+        const spec = parseRepoUrl(`${repo.host === 'github' ? 'github.com' : 'gitlab.com'}/${repo.owner}/${repo.repo}${repo.ref ? `/tree/${repo.ref}` : ''}`);
+        if (!spec) return;
+        const result = await fetchRepo(spec, {});
+        setLastRepoMeta(result.meta);
+        ingestComplete(result.files, result.skipped, result.readme, result.docs);
+      } catch (err) {
+        console.warn('codemap: hash bootstrap failed', err);
+      }
+    })();
 
     picker.addEventListener('change', async e => {
       const skipped = newSkipped();
       const t0 = mark();
       let readme = null;
+      const docs = [];
       const README_NAMES = ['readme.md', 'readme', 'readme.txt'];
+      const stripRoot = p => { const i = p.indexOf('/'); return i < 0 ? p : p.slice(i + 1); };
       const parsed = await Promise.all([...e.target.files].map(async f => {
         const path = f.webkitRelativePath || f.name;
-        // Root README only — repo-root means the path's first segment IS the file name
-        // (no nested dirs above) OR the relativePath splits to exactly two segments
-        // (rootDir/README.*) which is the picker's typical shape for a folder pick.
         const segs = path.split('/');
+        const docRelPath = stripRoot(path);
         const isRootReadme = (segs.length <= 2) && README_NAMES.includes(f.name.toLowerCase());
         if (isRootReadme) {
-          if (f.size <= MAX_BYTES) readme = { name: f.name, raw: await f.text() };
+          if (f.size <= MAX_BYTES) {
+            const raw = await f.text();
+            readme = { name: f.name, raw };
+            docs.push({ name: f.name, path: docRelPath, raw });
+          }
+          return null;
+        }
+        if (isDocPath(docRelPath)) {
+          if (f.size <= MAX_BYTES) {
+            const raw = await f.text();
+            docs.push({ name: f.name, path: docRelPath, raw });
+          }
           return null;
         }
         if (f.size > MAX_BYTES) { noteTooLarge(skipped, path, f.size); return null; }
@@ -111,9 +152,9 @@
         return p;
       }));
       const out = parsed.filter(Boolean);
-      measure('ingest(picker)', t0, `parsed=${out.length}`);
-      lastRepoMeta = null;
-      ingestComplete(out, skipped, readme);
+      measure('ingest(picker)', t0, `parsed=${out.length} docs=${docs.length}`);
+      setLastRepoMeta(null);
+      ingestComplete(out, skipped, readme, docs);
     });
 
     document.addEventListener('keydown', e => {
@@ -135,10 +176,24 @@
 
       if (e.key === 'h' || e.key === '?') { e.preventDefault(); toggleHelp(); renderAll(); return; }
 
-      // 1=Walk overlay, 2=Graph overlay, 3=Smells overlay
-      if (e.key === '1') { e.preventDefault(); setFullscreen(STATE.fullscreen === 'walk'   ? null : 'walk');   renderAll(); return; }
-      if (e.key === '2') { e.preventDefault(); setFullscreen(STATE.fullscreen === 'graph'  ? null : 'graph');  renderAll(); return; }
-      if (e.key === '3') { e.preventDefault(); setFullscreen(STATE.fullscreen === 'smells' ? null : 'smells'); renderAll(); return; }
+      // 1=Walk overlay, 2=Graph overlay, 3=Smells overlay, 4=Lineage overlay
+      if (e.key === '1') { e.preventDefault(); setFullscreen(STATE.fullscreen === 'walk'    ? null : 'walk');    renderAll(); return; }
+      if (e.key === '2') { e.preventDefault(); setFullscreen(STATE.fullscreen === 'graph'   ? null : 'graph');   renderAll(); return; }
+      if (e.key === '3') { e.preventDefault(); setFullscreen(STATE.fullscreen === 'smells'  ? null : 'smells');  renderAll(); return; }
+      if (e.key === '4') {
+        if (!STATE.lineage) return;
+        e.preventDefault();
+        setFullscreen(STATE.fullscreen === 'lineage' ? null : 'lineage');
+        renderAll();
+        return;
+      }
+      if (e.key === '5') {
+        if (!STATE.docs.length) return;
+        e.preventDefault();
+        setFullscreen(STATE.fullscreen === 'docs' ? null : 'docs');
+        renderAll();
+        return;
+      }
     });
 
     document.getElementById('help-panel').addEventListener('click', e => {

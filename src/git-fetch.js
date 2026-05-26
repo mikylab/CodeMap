@@ -1,5 +1,5 @@
 import { shouldSkipPath, parseFile } from './parser.js';
-import { newSkipped, noteTooLarge, MAX_BYTES } from './ingest.js';
+import { newSkipped, noteTooLarge, MAX_BYTES, isDocPath } from './ingest.js';
 import { mark, measure } from './perf.js';
 import { basename } from './dom.js';
 
@@ -73,6 +73,7 @@ export async function fetchRepo(spec, opts = {}) {
 
   const subPrefix = (spec.subpath || '').replace(/^\/+|\/+$/g, '');
   const inSubpath = p => !subPrefix || p === subPrefix || p.startsWith(subPrefix + '/');
+  const displayPathFor = p => (subPrefix && p.startsWith(subPrefix + '/')) ? p.slice(subPrefix.length + 1) : p;
   const filtered = [];
   for (const e of allEntries) {
     if (e.type !== 'blob') continue;
@@ -89,6 +90,7 @@ export async function fetchRepo(spec, opts = {}) {
 
   const skipped = newSkipped();
   const out = [];
+  const docs = [];
   let done = 0;
 
   await runWithConcurrency(taken, CONCURRENCY, async entry => {
@@ -102,12 +104,15 @@ export async function fetchRepo(spec, opts = {}) {
         if (src.length > MAX_BYTES) {
           noteTooLarge(skipped, entry.path, src.length);
         } else {
-          const displayPath = subPrefix && entry.path.startsWith(subPrefix + '/')
-            ? entry.path.slice(subPrefix.length + 1)
-            : entry.path;
-          const parsed = parseFile(basename(entry.path), src, displayPath);
-          if (parsed) out.push(parsed);
-          else skipped.unsupported++;
+          const displayPath = displayPathFor(entry.path);
+          const name = basename(entry.path);
+          if (isDocPath(displayPath)) {
+            docs.push({ name, path: displayPath, raw: src });
+          } else {
+            const parsed = parseFile(name, src, displayPath);
+            if (parsed) out.push(parsed);
+            else skipped.unsupported++;
+          }
         }
       } catch (err) {
         skipped.unsupported++;
@@ -120,14 +125,25 @@ export async function fetchRepo(spec, opts = {}) {
 
   onProgress({ phase: 'files', total: taken.length, done });
   measure('git-fetch', t0, `host=${spec.host} files=${out.length} truncated=${truncated}`);
+  // Promote the root README into a readme slot so callers that already use
+  // STATE.readme keep working.
+  const readme = pickReadme(docs);
   return {
     files: out,
     skipped,
+    docs,
+    readme,
     meta: {
       host: spec.host, owner: spec.owner, repo: spec.repo, ref: meta.ref,
       totalBlobs: filtered.length, fetched: taken.length, truncated,
     },
   };
+}
+
+function pickReadme(docs) {
+  const isReadme = d => /^readme(\.md|\.txt)?$/i.test(d.path) || /^readme(\.md|\.txt)?$/i.test(d.name);
+  const hit = docs.find(isReadme);
+  return hit ? { name: hit.name, raw: hit.raw } : null;
 }
 
 // ─── GitHub ───────────────────────────────────────────────────────────────

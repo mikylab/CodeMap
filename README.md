@@ -96,7 +96,7 @@ within the workspace. A back button (also `Backspace` or `Alt+←`) and a
 small breadcrumb trail under the title let you retrace a path through
 Walk → file → function → Flow → caller without losing the thread.
 
-## Walk, Graph, Smells (full-screen modes)
+## Walk, Graph, Smells, Lineage (full-screen modes)
 
 Open from the top bar; close with **Esc** or the back button.
 
@@ -111,6 +111,33 @@ Open from the top bar; close with **Esc** or the back button.
   paint paths between them.
 - **⚠ Smells** — every heuristic finding across the repo, filterable by
   kind. Click any finding to open the file in the workspace.
+- **🌳 Lineage** — interactive view of stacked-branch history parsed from
+  a `### Branch lineage` section in your README (or any captured doc).
+  Codemap reads the hand-drawn ASCII tree of branch names, the prose
+  annotations beside each branch, and any `← main is here` / `← active`
+  markers. When the repo was loaded via the URL loader, each node is
+  enriched with "on GitHub" / "missing on GitHub" badges and a "View on
+  GitHub" link. The Lineage button only appears when a lineage section is
+  found.
+
+## Docs tab
+
+Markdown files at the repo root and anywhere under `docs/` are surfaced
+in a **Docs** group at the top of the navigator. Clicking one renders it
+in the workspace with a minimal in-tree markdown renderer. Inline
+backticked file paths and `funcName()` mentions auto-link to the matching
+entity, turning the README into a navigable index of the codebase. A
+`### Branch lineage` section inside any doc is rendered inline as the
+interactive lineage tree, not as ASCII.
+
+## Shareable URL state
+
+The current view — selected file, function, doc, overlay, walk step,
+lineage branch, and (for URL-loaded repos) the repo origin — is encoded
+in `location.hash`. Refreshing restores the view; URL-loaded sessions
+produce links that another viewer can paste to land in the same place.
+Local drag-drop loads encode the view but not the file contents, so
+shared links only work fully for URL-loaded repos.
 
 ## Effects badges
 
@@ -139,7 +166,8 @@ reach; toggle **reverse** to flip to "everything that can reach here".
 
 ## Keyboard shortcuts
 
-- **1 / 2 / 3** — toggle Walk / Graph / Smells overlay
+- **1 / 2 / 3 / 4** — toggle Walk / Graph / Smells / Lineage overlay
+  (Lineage only active when a `### Branch lineage` section is found)
 - **Esc** — exit full-screen overlay
 - Type in the navigator search box to filter
 

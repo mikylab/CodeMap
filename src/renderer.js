@@ -6,6 +6,7 @@ import { renderWorkspace } from './views/workspace.js';
 import { renderFullscreen } from './views/fullscreen.js';
 import { renderHelp } from './views/help.js';
 import { clear } from './dom.js';
+import { writeHash } from './hash-state.js';
 
 export function renderAll() {
   renderToolbar(
@@ -18,6 +19,7 @@ export function renderAll() {
   renderWorkspaceShell();
   renderFullscreen(renderAll);
   renderHelp(renderAll);
+  writeHash();
 }
 
 function renderWorkspaceShell() {

@@ -1,5 +1,6 @@
 import {
-  STATE, setNavSearch, toggleDir, selectFile, selectFn, clearSelection,
+  STATE, setNavSearch, toggleDir, selectFile, selectFn, clearSelection, selectDoc,
+  toggleDocsExpanded,
 } from './state.js';
 import { cxBucket } from './tabs.js';
 import { fnKey } from './trace-graph.js';
@@ -11,15 +12,55 @@ export function renderNavigator(onChange) {
   clear(root);
   root.appendChild(header(onChange));
   root.appendChild(searchInput(onChange));
-  if (!STATE.files.length) {
+  if (!STATE.files.length && !STATE.docs.length) {
     root.appendChild(el('div', { cls: 'sb-empty', text: 'drop a folder' }));
     return;
   }
+  if (STATE.docs.length) root.appendChild(docsGroup(onChange));
   if (isSearching()) {
     root.appendChild(searchResults(onChange));
   } else {
     root.appendChild(fileTree(onChange));
   }
+}
+
+function docsGroup(onChange) {
+  const wrap = el('div', { cls: 'sb-docs' });
+  const expanded = STATE.docsExpanded;
+  const head = el('button', {
+    cls: 'sb-docs-head' + (expanded ? ' expanded' : ''),
+    type: 'button',
+    title: expanded ? 'Collapse docs' : 'Expand docs',
+    on: { click: () => { toggleDocsExpanded(); onChange(); } },
+  });
+  head.appendChild(el('span', { cls: 'sb-twirl', text: expanded ? '▾' : '▸' }));
+  head.appendChild(el('span', { cls: 'sb-docs-label', text: `Docs (${STATE.docs.length})` }));
+  wrap.appendChild(head);
+  if (!expanded) return wrap;
+  const docs = STATE.docs.slice().sort(docOrder);
+  for (const d of docs) {
+    const active = STATE.selectedDoc === d.path;
+    wrap.appendChild(el('button', {
+      cls: 'sb-doc-row' + (active ? ' active' : ''),
+      type: 'button',
+      title: d.path,
+      text: d.path,
+      on: { click: () => { selectDoc(d.path); onChange(); } },
+    }));
+  }
+  return wrap;
+}
+
+function docOrder(a, b) {
+  // README pinned first, then root-level docs, then docs/** alphabetically.
+  const score = d => {
+    if (/^readme(\.md|\.txt)?$/i.test(d.path) || /^readme/i.test(d.name)) return 0;
+    if (!d.path.includes('/')) return 1;
+    return 2;
+  };
+  const sa = score(a), sb = score(b);
+  if (sa !== sb) return sa - sb;
+  return a.path.localeCompare(b.path);
 }
 
 function header(onChange) {

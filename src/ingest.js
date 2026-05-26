@@ -7,6 +7,17 @@ const README_NAMES = ['readme.md', 'readme', 'readme.txt'];
 
 export function newSkipped() { return { tooLarge: [], tooLargeCount: 0, unsupported: 0 }; }
 
+// A captured "doc" is a markdown file at repo root OR anywhere under docs/.
+// This intentionally excludes random *.md scattered through src/ or test
+// fixtures so the Docs tab stays focused on intentional documentation.
+export function isDocPath(path) {
+  if (!/\.md$/i.test(path)) return false;
+  const norm = path.replace(/^\/+/, '');
+  if (!norm.includes('/')) return true;            // root-level .md
+  if (/^docs\//i.test(norm)) return true;          // docs/**
+  return false;
+}
+
 export function noteTooLarge(skipped, path, bytes) {
   skipped.tooLargeCount++;
   if (skipped.tooLarge.length < MAX_SKIPPED_SAMPLES) skipped.tooLarge.push({ path, bytes });
@@ -17,7 +28,7 @@ export async function ingestFromDrop(dataTransfer) {
   const items = [...dataTransfer.items];
   const out = [];
   const skipped = newSkipped();
-  const ctx = { readme: null };
+  const ctx = { readme: null, docs: [] };
   await Promise.all(items.map(it => {
     const entry = it.webkitGetAsEntry?.();
     if (entry) return walkEntry(entry, '', out, skipped, ctx);
@@ -25,7 +36,7 @@ export async function ingestFromDrop(dataTransfer) {
     return null;
   }));
   measure('ingest', t0, `parsed=${out.length} tooLarge=${skipped.tooLargeCount} unsupported=${skipped.unsupported}`);
-  return { files: out, skipped, readme: ctx.readme };
+  return { files: out, skipped, readme: ctx.readme, docs: ctx.docs };
 }
 
 async function walkEntry(entry, prefix, out, skipped, ctx) {
@@ -48,13 +59,25 @@ async function walkEntry(entry, prefix, out, skipped, ctx) {
 
 async function readFileItem(file, prefix, out, skipped, ctx) {
   const path = prefix + file.name;
-  // Root README: depth 0 (loose-file drop) or depth 1 (folder drop where the
-  // folder itself is the repo root, so its README sits one level under prefix).
+  // The drag-drop walker prefixes the root folder name onto every path
+  // ("repo/foo.md"). For doc-scope detection we strip exactly one root
+  // segment when present so root-level docs and `docs/**` files are
+  // recognized regardless of whether the user dropped a folder or loose files.
+  const docRelPath = stripRoot(path);
   const prefixDepth = prefix ? prefix.split('/').filter(Boolean).length : 0;
   if (ctx && prefixDepth <= 1 && README_NAMES.includes(file.name.toLowerCase())) {
-    if (file.size <= MAX_BYTES && !ctx.readme) {
-      ctx.readme = { name: file.name, raw: await file.text() };
+    if (file.size > MAX_BYTES) { noteTooLarge(skipped, path, file.size); return; }
+    if (!ctx.readme) {
+      const raw = await file.text();
+      ctx.readme = { name: file.name, raw };
+      ctx.docs.push({ name: file.name, path: docRelPath, raw });
     }
+    return;
+  }
+  if (ctx && isDocPath(docRelPath)) {
+    if (file.size > MAX_BYTES) { noteTooLarge(skipped, path, file.size); return; }
+    const raw = await file.text();
+    ctx.docs.push({ name: file.name, path: docRelPath, raw });
     return;
   }
   if (shouldSkipPath(path)) return;
@@ -63,4 +86,10 @@ async function readFileItem(file, prefix, out, skipped, ctx) {
   const parsed = parseFile(file.name, src, path);
   if (parsed) out.push(parsed);
   else skipped.unsupported++;
+}
+
+function stripRoot(path) {
+  const i = path.indexOf('/');
+  if (i < 0) return path;
+  return path.slice(i + 1);
 }

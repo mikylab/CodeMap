@@ -20,12 +20,18 @@ Codebase-agnostic, browser-native code intelligence tool.
 codemap/
 ├── index.html          # Single-file entry, no build step required
 ├── src/
-│   ├── parser.js       # Language-agnostic file parser (pure functions)
-│   ├── analyzer.js     # Metrics, call graph inference, complexity
-│   ├── walker.js       # Walk step generator (deterministic)
-│   ├── renderer.js     # All DOM rendering (no frameworks)
-│   ├── graph.js        # Canvas dep graph
-│   └── lang-config.js  # LANG_CONFIG — one entry per language
+│   ├── parser.js          # Language-agnostic file parser (pure functions)
+│   ├── analyzer.js        # Metrics, call graph inference, complexity
+│   ├── walker.js          # Walk step generator (deterministic)
+│   ├── renderer.js        # All DOM rendering (no frameworks)
+│   ├── graph.js           # Canvas dep graph
+│   ├── lang-config.js     # LANG_CONFIG — one entry per language
+│   ├── lineage.js         # Parse `### Branch lineage` block from docs
+│   ├── lineage-render.js  # Lineage tree component (shared overlay + inline)
+│   ├── lineage-github.js  # Optional GitHub branch enrichment
+│   ├── markdown.js        # Minimal in-tree markdown → DOM renderer
+│   ├── doc-render.js      # Render captured docs into the workspace
+│   └── hash-state.js      # location.hash ↔ STATE sync for shareable views
 ├── CLAUDE.md           # This file
 └── README.md
 ```
