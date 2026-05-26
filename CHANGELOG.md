@@ -4,6 +4,9 @@ All notable changes to Codemap are recorded here. Newest first.
 
 ## Unreleased
 
+- fix(lineage): GitHub branch enrichment is now generation-guarded — a slow Branches API call from a previous repo can no longer overwrite the current `STATE.lineage` when its promise resolves after the user has loaded a different repo.
+- fix(hash-bootstrap): URL restore for refs containing `/` (e.g. `feature/login`, `release/1.2`) now loads the correct branch. The bootstrap previously re-built `host.com/owner/repo/tree/<ref>` and re-parsed it, which truncated the ref at the first slash and treated the remainder as a subpath.
+- fix(hash-bootstrap): GitLab refs are restored correctly — the bootstrap was rebuilding `gitlab.com/<owner>/<repo>/tree/<ref>` but `parseRepoUrl` requires the `/-/tree/` separator, so the ref was always dropped. Both issues fixed by constructing the fetch spec directly from `repoFromHash` output instead of round-tripping through a URL string.
 - fix(ingest): oversized markdown docs (README, `docs/**.md` over `MAX_BYTES`) now surface in the warnbar via `noteTooLarge` instead of being silently dropped from both the parser path and the Docs tab.
 - fix(history): `snapshotsEqual` now compares `docPath`, so two consecutive doc snapshots for different docs are no longer treated as duplicates. Back navigation across the in-doc switcher now returns to the doc the user was actually on.
 - fix(hash): `applyHash` now resets `STATE.fullscreen` / selection / `walkIdx` / `selectedLineageBranch` when the corresponding hash field is absent, so browser back/forward and external hash edits no longer leave stale overlays open or stale docs/files selected.

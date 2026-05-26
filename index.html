@@ -34,7 +34,7 @@
     import { parseLineage } from './src/lineage.js';
     import { enrichLineageFromGitHub } from './src/lineage-github.js';
     import { installHashSync, writeHash, applyHash, repoFromHash } from './src/hash-state.js';
-    import { parseRepoUrl, fetchRepo } from './src/git-fetch.js';
+    import { fetchRepo } from './src/git-fetch.js';
 
     const overlay = document.getElementById('drop-overlay');
     const picker = document.getElementById('dir-picker');
@@ -59,8 +59,10 @@
       warnbar.hidden = false;
     }
 
+    let ingestGen = 0;
     function ingestComplete(files, skipped, readme, docs) {
       const t0 = mark();
+      const gen = ++ingestGen;
       const analysis = analyze(files);
       setFiles(files, analysis);
       setSkipped(skipped);
@@ -73,8 +75,11 @@
       renderAll();
       measure('renderAll', t0);
       // Best-effort GitHub branch enrichment when we know the repo origin.
+      // Guarded by ingestGen so a slow Branches API call from a previous repo
+      // can't overwrite the current STATE.lineage when it resolves.
       if (lineage && STATE.lastRepoMeta && STATE.lastRepoMeta.host === 'github') {
         enrichLineageFromGitHub(lineage, STATE.lastRepoMeta).then(changed => {
+          if (gen !== ingestGen) return;
           if (changed) { setLineage(lineage); renderAll(); }
         }).catch(err => console.warn('codemap: lineage enrichment failed', err));
       }
@@ -109,8 +114,14 @@
       const repo = repoFromHash(location.hash);
       if (!repo) return;
       try {
-        const spec = parseRepoUrl(`${repo.host === 'github' ? 'github.com' : 'gitlab.com'}/${repo.owner}/${repo.repo}${repo.ref ? `/tree/${repo.ref}` : ''}`);
-        if (!spec) return;
+        // Construct the spec directly from the parsed repo descriptor instead
+        // of round-tripping through a URL string. Round-tripping loses refs
+        // that contain '/' (e.g. feature/login) and the GitLab '/-/tree/'
+        // separator, so the wrong branch — or no branch — would load.
+        const spec = {
+          host: repo.host, owner: repo.owner, repo: repo.repo,
+          ref: repo.ref || null, subpath: '',
+        };
         const result = await fetchRepo(spec, {});
         setLastRepoMeta(result.meta);
         ingestComplete(result.files, result.skipped, result.readme, result.docs);
