@@ -197,6 +197,46 @@ test('smells: Python relative import that truly resolves to nothing IS flagged',
     `.nonexistent has no target and should be flagged`);
 });
 
+test('smells: Python local var via dispatch.get NOT flagged', () => {
+  const state = buildState([{
+    name: 'a.py', path: 'a.py',
+    src: `dispatch = {}\ndef run(action):\n    handler = dispatch.get(action)\n    if handler:\n        handler()\n`,
+  }]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'unresolved-call' && h.subkind === 'handler'),
+    `handler is a local binding; got ${JSON.stringify(out.filter(h => h.kind === 'unresolved-call'))}`);
+});
+
+test('smells: Python module-level alias assignment NOT flagged', () => {
+  const state = buildState([{
+    name: 'a.py', path: 'a.py',
+    src: `def other_name():\n    return 1\n_name = other_name\ndef use():\n    return _name()\n`,
+  }]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'unresolved-call' && h.subkind === '_name'),
+    `_name is a module-level alias; got ${JSON.stringify(out.filter(h => h.kind === 'unresolved-call'))}`);
+});
+
+test('smells: Python conditional module-level binding NOT flagged', () => {
+  const state = buildState([{
+    name: 'a.py', path: 'a.py',
+    src: `try:\n    from c import impl\nexcept ImportError:\n    impl = None\ndef run():\n    return impl()\n`,
+  }]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'unresolved-call' && h.subkind === 'impl'),
+    `impl is bound on both branches; got ${JSON.stringify(out.filter(h => h.kind === 'unresolved-call'))}`);
+});
+
+test('smells: Python renamed from-import NOT flagged', () => {
+  const state = buildState([{
+    name: 'a.py', path: 'a.py',
+    src: `from x import foo as bar\ndef run():\n    return bar()\n`,
+  }]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'unresolved-call' && h.subkind === 'bar'),
+    `bar is the local alias; got ${JSON.stringify(out.filter(h => h.kind === 'unresolved-call'))}`);
+});
+
 test('smells: deterministic & sorted', () => {
   const state = buildState([{
     name: 'b.js', path: 'b.js',

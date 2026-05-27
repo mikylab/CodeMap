@@ -143,6 +143,10 @@ function collectJsBindings(src, set) {
     const n = m[1] || m[2] || m[3];
     if (n) set.add(n);
   }
+  // Module-level bare assignments (e.g. `_name = other_name`). Any assignment
+  // at column 0 creates a real binding, including conditional/guarded paths.
+  const assignRe = /^([A-Za-z_]\w*)\s*=(?!=)/gm;
+  while ((m = assignRe.exec(src)) !== null) set.add(m[1]);
 }
 
 function addJsClause(clause, set) {
@@ -187,6 +191,12 @@ function collectPyBindings(src, set) {
   }
   const defRe = /(?:^|\n)[ \t]*(?:def|class)\s+(\w+)/g;
   while ((m = defRe.exec(src)) !== null) set.add(m[1]);
+  // Module-level assignments: any `name = ...` at column 0 (no leading
+  // indentation) creates a real binding, including conditional/guarded
+  // reassignments. We treat "any module-scope assignment defines the name"
+  // rather than "first unconditional assignment defines it".
+  const assignRe = /^([A-Za-z_]\w*)\s*(?::[^=\n]+)?=(?!=)/gm;
+  while ((m = assignRe.exec(src)) !== null) set.add(m[1]);
 }
 
 function collectGoBindings(src, set) {
@@ -224,10 +234,17 @@ function detectUnresolvedCalls(file, family, importBindingsByFile, sameFileNames
 
   // Per fn: walk declared `calls` array; flag names not in builtins/imports/local.
   for (const fn of file.fns) {
+    const fnParamNames = (fn.params || []).map(p => p.name || p).filter(Boolean);
+    const fnScope = new Set([...fnParamNames, ...(fn.locals || [])]);
     for (const callName of (fn.calls || [])) {
       if (builtins.has(callName)) continue;
       if (imports.has(callName)) continue;
       if (localNames.has(callName)) continue;
+      // Bindings inside the function body itself (params, plus any local
+      // assignment like `handler = dispatch.get(action)`) satisfy the check —
+      // a name assigned anywhere in the function's scope is defined for
+      // later uses in that scope.
+      if (fnScope.has(callName)) continue;
       // Locate first occurrence in the fn body (cheap heuristic for line number).
       const startIdx = lineStartIdx(file.src, fn.lineNum);
       const re = new RegExp(`\\b${callName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\(`, 'g');
