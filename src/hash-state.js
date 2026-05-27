@@ -116,6 +116,20 @@ export function repoFromHash(hash) {
   return { host: m[1], owner: m[2], repo: m[3], ref: m[4] || null };
 }
 
+// Wipe the URL fragment entirely. Used by the toolbar Clear button so the
+// next page reload starts from the empty drop-zone state instead of
+// re-hydrating from a stale `repo=`/`file=` hash.
+export function clearHash() {
+  lastWrittenHash = '';
+  suppressNextHashChange = true;
+  try {
+    history.replaceState(null, '', location.pathname + location.search);
+  } catch {
+    location.hash = '';
+  }
+  suppressNextHashChange = false;
+}
+
 export function writeHash() {
   // Don't clobber an incoming hash before any data is loaded — otherwise the
   // very first renderAll() (with empty STATE) wipes file=/fn=/overlay= fields

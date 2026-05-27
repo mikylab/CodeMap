@@ -82,6 +82,13 @@ button, input, select { font: inherit; color: inherit; }
   padding: 9px 14px; cursor: pointer; transition: all 0.15s;
 }
 .tb-url:hover { border-color: var(--accent); color: var(--accent); }
+.tb-clear {
+  font-family: var(--font-mono); font-size: 13px; font-weight: 500;
+  color: var(--muted); background: transparent;
+  border: 1px solid var(--border2); border-radius: 8px;
+  padding: 9px 14px; cursor: pointer; transition: all 0.15s;
+}
+.tb-clear:hover { border-color: var(--warn, #d97757); color: var(--warn, #d97757); }
 
 /* ─── git URL modal ────────────────────────────────────────────────────── */
 .gm-overlay {

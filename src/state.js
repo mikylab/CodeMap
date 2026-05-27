@@ -406,6 +406,35 @@ export function setReadme(readme) { STATE.readme = readme || null; }
 export function setDocs(docs) { STATE.docs = Array.isArray(docs) ? docs : []; }
 export function setLineage(lineage) { STATE.lineage = lineage || null; }
 export function setLastRepoMeta(meta) { STATE.lastRepoMeta = meta || null; }
+
+// Wipe everything back to the empty-drop-zone state. Called by the toolbar
+// "Clear" button so the user can escape a hash-restored view without having
+// to edit the URL by hand.
+export function resetAll() {
+  setFiles([]);
+  STATE.readme = null;
+  STATE.docs = [];
+  STATE.selectedDoc = null;
+  STATE.lineage = null;
+  STATE.selectedLineageBranch = null;
+  STATE.lastRepoMeta = null;
+  STATE.pendingHashParts = null;
+  STATE.pendingScrollTop = null;
+  STATE.skipped = newSkipped();
+  STATE.history = [];
+  STATE.traceHistory = [];
+  STATE.traceHistoryIdx = -1;
+  STATE.fileTraceRoot = null;
+  STATE.fileTraceHistory = [];
+  STATE.fileTraceHistoryIdx = -1;
+  STATE.helpOpen = false;
+  STATE.navSearch = '';
+  STATE.sidebarFilter = '';
+  STATE.activeTab = 'overview';
+  STATE.fnEffectFilter = new Set();
+  STATE.smellsKindFilter = new Set();
+  STATE.smellsFileFilter = null;
+}
 export function setPendingHashParts(parts) { STATE.pendingHashParts = parts && Object.keys(parts).length ? parts : null; }
 export function setSelectedLineageBranch(name) { STATE.selectedLineageBranch = name || null; }
 export function selectDoc(path) {

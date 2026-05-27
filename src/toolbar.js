@@ -1,7 +1,8 @@
 import {
   STATE, setFullscreen, toggleFnEffectFilter, toggleHelp, exitFullscreen, closeHelp,
-  clearSelection,
+  clearSelection, resetAll,
 } from './state.js';
+import { clearHash } from './hash-state.js';
 import { EFFECT_TAGS } from './effects-config.js';
 import { el, clear } from './dom.js';
 import { VERSION } from './version.js';
@@ -20,6 +21,24 @@ export function renderToolbar(onChange, onDropClick, onUrlClick) {
   root.appendChild(helpButton(onChange));
   root.appendChild(urlButton(onUrlClick));
   root.appendChild(dropButton(onDropClick));
+  if (STATE.files.length || STATE.docs.length || STATE.lastRepoMeta) {
+    root.appendChild(clearButton(onChange));
+  }
+}
+
+function clearButton(onChange) {
+  return el('button', {
+    cls: 'tb-clear', type: 'button', text: 'Clear',
+    title: 'Unload this project and clear the URL — returns to the empty drop screen',
+    on: { click: () => {
+      if (!confirm('Clear the loaded project? The URL hash will be reset too.')) return;
+      resetAll();
+      clearHash();
+      const warnbar = document.getElementById('warnbar');
+      if (warnbar) { warnbar.hidden = true; warnbar.textContent = ''; }
+      onChange();
+    } },
+  });
 }
 
 function helpButton(onChange) {
