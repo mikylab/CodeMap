@@ -11,6 +11,11 @@ export const LANG_CONFIG = {
       /require\(["']([^"']+)["']\)/gm,
     ],
     docBefore: /\/\*\*([\s\S]*?)\*\//g,
+    locals: [
+      /(?:^|;|\{|,)\s*(?:const|let|var)\s+(\w+)\s*=/gm,
+      /(?:^|;|\{)\s*(?:const|let|var)\s*\{\s*([^}]+)\s*\}\s*=/gm,
+      /(?:^|;|\{)\s*(?:const|let|var)\s*\[\s*([^\]]+)\s*\]\s*=/gm,
+    ],
   },
   py: {
     name: 'Python', color: '#3B8BD4', comment: '#',
@@ -20,30 +25,35 @@ export const LANG_CONFIG = {
       /^\s*import\s+([\w.]+)/gm,
     ],
     docInside: /^\s*("""|''')([\s\S]*?)\1/,
+    locals: [/^[ \t]+([A-Za-z_]\w*)\s*=(?!=)/gm],
   },
   go: {
     name: 'Go', color: '#5DCAA5', comment: '//', localStyle: 'path',
     fn: [/func\s+(?:\([^)]+\)\s+)?(\w+)/gm],
     imports: [/import\s+(?:[\w.]+\s+)?["']([^"']+)["']/gm],
     docBefore: /(?:^[ \t]*\/\/[^\n]*\n)+/m,
+    locals: [/(?:^|;|\{)\s*(?:var\s+)?(\w+)\s*:?=(?!=)/gm],
   },
   rs: {
     name: 'Rust', color: '#D85A30', comment: '//',
     fn: [/fn\s+(\w+)/gm, /struct\s+(\w+)/gm, /enum\s+(\w+)/gm],
     imports: [/use\s+(\w+)/gm],
     docBefore: /(?:^[ \t]*\/\/\/[^\n]*\n)+/m,
+    locals: [/(?:^|;|\{)\s*let\s+(?:mut\s+)?(\w+)/gm],
   },
   rb: {
     name: 'Ruby', color: '#E24B4A', comment: '#', localStyle: 'path',
     fn: [/def\s+(\w+)/gm, /class\s+(\w+)/gm, /module\s+(\w+)/gm],
     imports: [/require(?:_relative)?\s+["']([^"']+)["']/gm],
     docBefore: /(?:^[ \t]*#[^\n]*\n)+/m,
+    locals: [/^[ \t]+([a-z_]\w*)\s*=(?!=)/gm],
   },
   java: {
     name: 'Java', color: '#E85D24', comment: '//',
     fn: [/(?:public|private|protected|static|\s)+\s+[\w<>\[\]]+\s+(\w+)\s*\([^)]*\)\s*(?:throws[^{]+)?\{/gm],
     imports: [/import\s+([\w.]+);/gm],
     docBefore: /\/\*\*([\s\S]*?)\*\//g,
+    locals: [/^[ \t]+(?:final\s+)?[\w<>\[\]]+\s+(\w+)\s*=(?!=)/gm],
   },
 };
 
