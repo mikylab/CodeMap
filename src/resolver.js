@@ -19,7 +19,15 @@ export function resolve(token, file, lineNum, enclosingFn, state) {
   if (!token || KEYWORDS.has(token)) return null;
   if (token.length < 2) return null;
 
-  // Steps 2-6 added in later tasks.
+  if (enclosingFn) {
+    const paramNames = (enclosingFn.params || []).map(p => p.name || p).filter(Boolean);
+    if (paramNames.includes(token)) {
+      return withShadow({ kind: 'param', context: enclosingFn.name }, token, file, state);
+    }
+    if ((enclosingFn.locals || []).includes(token)) {
+      return withShadow({ kind: 'local', context: enclosingFn.name }, token, file, state);
+    }
+  }
 
   const cfg = LANG_CONFIG[file.ext];
   if (cfg?.builtins?.has(token)) {
@@ -27,4 +35,11 @@ export function resolve(token, file, lineNum, enclosingFn, state) {
   }
 
   return { kind: 'unresolved' };
+}
+
+function withShadow(result, token, file, state) {
+  const entries = state.resolveIndex?.get?.(token) || [];
+  const sameFile = entries.find(e => e.file === file.path);
+  if (sameFile) result.shadowed = sameFile;
+  return result;
 }
