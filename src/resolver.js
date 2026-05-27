@@ -29,6 +29,20 @@ export function resolve(token, file, lineNum, enclosingFn, state) {
     }
   }
 
+  const entries = state.resolveIndex?.get?.(token) || [];
+  if (entries.length) {
+    const sameFile = entries.filter(e => e.file === file.path);
+    if (sameFile.length) {
+      const e = sameFile.slice().sort((a, b) => a.lineNum - b.lineNum)[0];
+      return { ...e };
+    }
+    if (entries.length === 1) return { ...entries[0] };
+    const candidates = entries.slice().sort(
+      (a, b) => a.file.localeCompare(b.file) || a.lineNum - b.lineNum
+    );
+    return { kind: 'ambiguous', candidates };
+  }
+
   const cfg = LANG_CONFIG[file.ext];
   if (cfg?.builtins?.has(token)) {
     return { kind: 'builtin', language: cfg.name };
