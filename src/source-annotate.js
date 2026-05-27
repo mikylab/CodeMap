@@ -1,83 +1,58 @@
-// Build a per-line annotation map for the Source view: every call site whose
-// target resolves to an in-repo function becomes a clickable link, every
-// import line whose lib resolves to a repo file becomes a link too.
-// Pure regex, no AST. Designed to be called lazily and cached per file.
+// Per-line annotation map for the Source view. Every identifier-shaped token
+// outside strings and comments is run through resolver.resolve(); whatever
+// resolves (function, class, import, param, local, builtin) or doesn't
+// (ambiguous, unresolved) becomes an annotation. Pure regex tokenization.
 
-const KEYWORDS = new Set('if for while switch return class import export const let var def function async await new try catch finally else do break continue in of typeof instanceof sizeof match throw yield super self this print puts println printf lambda fn struct enum impl mod use defer go synchronized assert raise pass'.split(' '));
-const CALL_RE = /\b([A-Za-z_]\w*)\s*\(/g;
+import { resolve } from './resolver.js';
+
+const IDENT_RE = /\b([A-Za-z_]\w*)\b/g;
 
 export function annotateFile(file, state) {
   const byLine = new Map();
   if (!file || !file.src) return { byLine };
 
+  const fnAtLine = buildFnAtLine(file);
   const lines = file.src.split('\n');
-
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const annots = [];
-    CALL_RE.lastIndex = 0;
-    let m;
-    while ((m = CALL_RE.exec(line)) !== null) {
-      const name = m[1];
-      if (name.length < 2 || KEYWORDS.has(name)) continue;
-      const target = resolveCall(name, file, state);
-      annots.push({
-        col: m.index,
-        len: name.length,
-        kind: 'call',
-        label: name,
-        target: target ? target.key : null,
-        conf: target ? target.conf : 'unresolved',
-      });
-    }
-    addImportAnnots(file, line, state, annots);
+    const lineNum = i + 1;
+    const raw = lines[i];
+    const stripped = stripLineComment(raw, file.ext);
+    if (!stripped) continue;
 
-    if (annots.length) {
-      annots.sort((a, b) => a.col - b.col);
-      const filtered = [];
-      let lastEnd = -1;
-      for (const a of annots) {
-        if (a.col >= lastEnd) {
-          filtered.push(a);
-          lastEnd = a.col + a.len;
-        }
-      }
-      byLine.set(i + 1, filtered);
+    const annots = [];
+    IDENT_RE.lastIndex = 0;
+    let m;
+    while ((m = IDENT_RE.exec(stripped)) !== null) {
+      const name = m[1];
+      const col = m.index;
+      const prev = stripped[col - 1];
+      if (prev === '.' || (prev === '?' && col > 1 && stripped[col - 2] === '.')) continue;
+      const enclosing = fnAtLine.get(lineNum) || null;
+      const r = resolve(name, file, lineNum, enclosing, state);
+      if (!r) continue;
+      annots.push({ col, len: name.length, label: name, ...r });
     }
+    if (annots.length) byLine.set(lineNum, annots);
   }
   return { byLine };
 }
 
-function resolveCall(name, file, state) {
-  const byName = state.fnByName?.get?.(name);
-  if (!byName) return null;
-  return {
-    key: `${byName.file}::${byName.name}`,
-    conf: byName.file === file.path ? 'high' : 'med',
-  };
+function buildFnAtLine(file) {
+  const m = new Map();
+  for (const fn of (file.fns || [])) {
+    const start = fn.lineNum;
+    const end = start + (fn.lines || 0);
+    for (let i = start; i <= end; i++) m.set(i, fn);
+  }
+  return m;
 }
 
-function addImportAnnots(file, line, state, annots) {
-  if (!file.imports?.length) return;
-  for (const im of file.imports) {
-    const lib = im.lib;
-    if (!lib) continue;
-    const idx = line.indexOf(lib);
-    if (idx < 0) continue;
-    const target = resolveImportToFile(lib, state);
-    if (!target) continue;
-    annots.push({
-      col: idx, len: lib.length,
-      kind: 'import', label: lib,
-      target, conf: 'high',
-    });
+function stripLineComment(line, ext) {
+  const trimmed = line.trim();
+  if (ext === 'py' || ext === 'rb') {
+    if (trimmed.startsWith('#')) return null;
+  } else {
+    if (trimmed.startsWith('//') || trimmed.startsWith('*')) return null;
   }
-}
-
-function resolveImportToFile(lib, state) {
-  for (const f of state.files || []) {
-    const stem = f.path.replace(/\.[^.]+$/, '');
-    if (stem === lib || stem.endsWith('/' + lib)) return f.path;
-  }
-  return null;
+  return line;
 }
