@@ -72,7 +72,7 @@ function extractFns(src, cfg, path, newlines, ext) {
     const callText = stripNoise(body.text, ext);
     const paramNames = signatureParamNames(src, idx);
     const params = extractParams(src, idx);
-    const locals = extractLocals(body.text, cfg);
+    const locals = extractLocals(callText, cfg);
     const nlAfter = src.indexOf('\n', idx);
     const bodyStartIdx = nlAfter < 0 ? src.length : nlAfter + 1;
     const doc = extractDocBefore(src, idx, cfg)
@@ -387,19 +387,16 @@ function decisionCount(s) {
 
 function extractLocals(bodyText, cfg) {
   if (!cfg.locals || !cfg.locals.length) return [];
-  const masked = bodyText; // already a body slice; masking is overkill here
   const out = new Set();
   for (const re of cfg.locals) {
     re.lastIndex = 0;
     let m;
-    while ((m = re.exec(masked)) !== null) {
+    while ((m = re.exec(bodyText)) !== null) {
       const raw = m[1];
       if (!raw) continue;
-      // Destructuring captures: comma-separated names possibly with `:` rename or `...rest`
       for (const tok of raw.split(/[,\s]+/)) {
         const cleaned = tok.replace(/^\.\.\./, '').split(':')[0].trim();
         if (!/^[A-Za-z_]\w*$/.test(cleaned)) continue;
-        if (cleaned.length < 1) continue;
         if (KEYWORDS.has(cleaned)) continue;
         out.add(cleaned);
       }
