@@ -39,7 +39,18 @@ export const LANG_CONFIG = {
       /^\s*import\s+([\w.]+)/gm,
     ],
     docInside: /^\s*("""|''')([\s\S]*?)\1/,
-    locals: [/^[ \t]+([A-Za-z_]\w*)\s*=(?!=)/gm],
+    locals: [
+      // simple `name = ...` (indented; module-level handled separately in smells)
+      /^[ \t]+([A-Za-z_]\w*)\s*=(?!=)/gm,
+      // tuple/star unpacking on assignment: `a, b = ...` / `*rest, last = ...`
+      /^[ \t]+([\w,\s*()]+?)\s*=(?!=)/gm,
+      // for-loop / comprehension targets: `for x in ...` / `for a, b in ...`
+      /\bfor\s+([\w,\s*()]+?)\s+in\b/gm,
+      // `with ... as x` / `except ... as x` (one capture per `as` clause)
+      /\bas\s+(\w+)\s*[:,)\n]/gm,
+      // walrus operator: `name := expr`
+      /\b(\w+)\s*:=/gm,
+    ],
     builtins: new Set([
       'print', 'len', 'range', 'enumerate', 'zip', 'map', 'filter', 'sorted', 'reversed',
       'dict', 'list', 'tuple', 'set', 'frozenset', 'str', 'int', 'float', 'bool', 'bytes', 'bytearray',

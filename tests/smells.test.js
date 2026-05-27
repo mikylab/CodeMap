@@ -227,6 +227,76 @@ test('smells: Python conditional module-level binding NOT flagged', () => {
     `impl is bound on both branches; got ${JSON.stringify(out.filter(h => h.kind === 'unresolved-call'))}`);
 });
 
+test('smells: Python for-loop variable NOT flagged', () => {
+  const state = buildState([{
+    name: 'a.py', path: 'a.py',
+    src: `def run(items):\n    for cb in items:\n        cb()\n`,
+  }]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'unresolved-call' && h.subkind === 'cb'),
+    `cb is bound by the for-loop; got ${JSON.stringify(out.filter(h => h.kind === 'unresolved-call'))}`);
+});
+
+test('smells: Python for-loop tuple unpacking NOT flagged', () => {
+  const state = buildState([{
+    name: 'a.py', path: 'a.py',
+    src: `def run(pairs):\n    for key, fn in pairs:\n        fn(key)\n`,
+  }]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'unresolved-call' && h.subkind === 'fn'),
+    `fn is bound by tuple unpacking; got ${JSON.stringify(out.filter(h => h.kind === 'unresolved-call'))}`);
+});
+
+test('smells: Python with-as binding NOT flagged', () => {
+  const state = buildState([{
+    name: 'a.py', path: 'a.py',
+    src: `def run(ctx):\n    with ctx as svc:\n        svc()\n`,
+  }]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'unresolved-call' && h.subkind === 'svc'),
+    `svc is bound by with...as; got ${JSON.stringify(out.filter(h => h.kind === 'unresolved-call'))}`);
+});
+
+test('smells: Python except-as binding NOT flagged', () => {
+  const state = buildState([{
+    name: 'a.py', path: 'a.py',
+    src: `def run():\n    try:\n        do()\n    except Exception as err:\n        err()\n`,
+  }]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'unresolved-call' && h.subkind === 'err'),
+    `err is bound by except...as; got ${JSON.stringify(out.filter(h => h.kind === 'unresolved-call'))}`);
+});
+
+test('smells: Python walrus binding NOT flagged', () => {
+  const state = buildState([{
+    name: 'a.py', path: 'a.py',
+    src: `def run(get):\n    if (cb := get()):\n        cb()\n`,
+  }]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'unresolved-call' && h.subkind === 'cb'),
+    `cb is bound by walrus; got ${JSON.stringify(out.filter(h => h.kind === 'unresolved-call'))}`);
+});
+
+test('smells: Python *args param NOT flagged when called', () => {
+  const state = buildState([{
+    name: 'a.py', path: 'a.py',
+    src: `def run(*handlers):\n    for h in handlers:\n        h()\n    handlers()\n`,
+  }]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'unresolved-call' && h.subkind === 'handlers'),
+    `*handlers binds 'handlers'; got ${JSON.stringify(out.filter(h => h.kind === 'unresolved-call'))}`);
+});
+
+test('smells: Python comprehension for-target NOT flagged', () => {
+  const state = buildState([{
+    name: 'a.py', path: 'a.py',
+    src: `def run(items):\n    return [cb() for cb in items]\n`,
+  }]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'unresolved-call' && h.subkind === 'cb'),
+    `cb is bound by comprehension; got ${JSON.stringify(out.filter(h => h.kind === 'unresolved-call'))}`);
+});
+
 test('smells: Python renamed from-import NOT flagged', () => {
   const state = buildState([{
     name: 'a.py', path: 'a.py',

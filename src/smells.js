@@ -234,7 +234,9 @@ function detectUnresolvedCalls(file, family, importBindingsByFile, sameFileNames
 
   // Per fn: walk declared `calls` array; flag names not in builtins/imports/local.
   for (const fn of file.fns) {
-    const fnParamNames = (fn.params || []).map(p => p.name || p).filter(Boolean);
+    const fnParamNames = (fn.params || [])
+      .map(p => (p.name || p || '').replace(/^\**/, ''))
+      .filter(Boolean);
     const fnScope = new Set([...fnParamNames, ...(fn.locals || [])]);
     for (const callName of (fn.calls || [])) {
       if (builtins.has(callName)) continue;

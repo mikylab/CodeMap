@@ -443,7 +443,15 @@ function extractLocals(bodyText, cfg) {
       const raw = m[1];
       if (!raw) continue;
       for (const tok of raw.split(/[,\s]+/)) {
-        const cleaned = tok.replace(/^\.\.\./, '').split(':')[0].trim();
+        // Strip the wrapping syntax around binding targets so tuple/star
+        // unpacking (`a, b`, `(a, b)`, `*rest, last`, `**kw`) and type-
+        // annotated names (`x: int`) reduce to bare identifiers.
+        const cleaned = tok
+          .replace(/^\.\.\./, '')
+          .replace(/^[*(\[]+/, '')
+          .replace(/[)\]]+$/, '')
+          .split(':')[0]
+          .trim();
         if (!/^[A-Za-z_]\w*$/.test(cleaned)) continue;
         if (KEYWORDS.has(cleaned)) continue;
         out.add(cleaned);

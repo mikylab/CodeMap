@@ -20,18 +20,19 @@ export function renderToolbar(onChange, onDropClick, onUrlClick) {
   root.appendChild(projectBadge());
   root.appendChild(helpButton(onChange));
   root.appendChild(urlButton(onUrlClick));
+  root.appendChild(clearButton(onChange));
   root.appendChild(dropButton(onDropClick));
-  if (STATE.files.length || STATE.docs.length || STATE.lastRepoMeta) {
-    root.appendChild(clearButton(onChange));
-  }
 }
 
 function clearButton(onChange) {
+  const hasState = !!(STATE.files.length || STATE.docs.length || STATE.lastRepoMeta);
   return el('button', {
     cls: 'tb-clear', type: 'button', text: 'Clear',
-    title: 'Unload this project and clear the URL — returns to the empty drop screen',
+    title: hasState
+      ? 'Unload this project and clear the URL — returns to the empty drop screen'
+      : 'Clear the URL hash so the next reload starts pristine',
     on: { click: () => {
-      if (!confirm('Clear the loaded project? The URL hash will be reset too.')) return;
+      if (hasState && !confirm('Clear the loaded project? The URL hash will be reset too.')) return;
       resetAll();
       clearHash();
       const warnbar = document.getElementById('warnbar');
