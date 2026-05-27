@@ -66,6 +66,12 @@ function buildResolveIndex(files) {
       if (!im.lib) continue;
       add(im.lib, { kind: 'import', file: f.path, lineNum: 1, lib: im.lib });
     }
+    // Python `from pkg import Name` — surface the imported names so types and
+    // helpers brought in via from-imports resolve in the Source view.
+    for (const im of (f.fromImportNames || [])) {
+      if (!im.name) continue;
+      add(im.name, { kind: 'import', file: f.path, lineNum: 1, lib: im.lib });
+    }
   }
   for (const arr of idx.values()) {
     arr.sort((a, b) => a.file.localeCompare(b.file) || a.lineNum - b.lineNum);

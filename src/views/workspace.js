@@ -767,6 +767,10 @@ function renderAnnotatedLine(parent, lineText, annots) {
 }
 
 function makeAnnotElement(a, tok) {
+  // Passive syntax tokens — no popover, no click; pure colouring.
+  if (a.kind === 'string' || a.kind === 'comment' || a.kind === 'keyword' || a.kind === 'number') {
+    return el('span', { cls: `tok-${a.kind}`, text: tok });
+  }
   if (a.kind === 'function' || a.kind === 'class') {
     return el('button', {
       cls: `src-link kind-${a.kind}`,
