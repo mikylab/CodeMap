@@ -11,6 +11,7 @@ const EMPTY_ANALYSIS = {
   callsByFn: new Map(), callersByFn: new Map(), callEdges: [],
   fanIn: new Map(), fanOut: new Map(),
   fileImports: new Map(), fileImporters: new Map(),
+  resolveIndex: new Map(),
 };
 
 export const STATE = {
@@ -58,6 +59,7 @@ export const STATE = {
   graphHideIsolated: true,
   fileImports: new Map(),
   fileImporters: new Map(),
+  resolveIndex: new Map(),
   effects: new Map(),
   fileEffects: new Map(),
   fnEffectFilter: new Set(),
@@ -101,6 +103,7 @@ export function setFiles(files, analysis = EMPTY_ANALYSIS) {
   STATE.fanOut = analysis.fanOut || new Map();
   STATE.fileImports = analysis.fileImports || new Map();
   STATE.fileImporters = analysis.fileImporters || new Map();
+  STATE.resolveIndex = analysis.resolveIndex || new Map();
   computeEffects(STATE);
   STATE.smells = detectSmells(STATE);
   STATE.smellsByFile = indexSmellsByFile(STATE.smells);
