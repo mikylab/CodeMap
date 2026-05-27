@@ -1555,18 +1555,28 @@ button, input, select { font: inherit; color: inherit; }
 }
 .ws-readme-toggle:hover { text-decoration: underline; }
 
-/* Interactive source links (reader-mode) */
+/* Interactive source links (reader-mode) — kind-based identifier resolution */
 .fn-source-code .src-link {
   background: transparent; border: none; padding: 0; margin: 0;
-  font: inherit; color: inherit; cursor: pointer;
-  border-bottom: 1px dashed transparent;
+  font: inherit; color: inherit; cursor: help;
 }
-.fn-source-code .src-link:hover { color: var(--accent, #4d8df0); }
-.fn-source-code .src-link.conf-high   { border-bottom-color: var(--accent, #4d8df0); border-bottom-style: solid; }
-.fn-source-code .src-link.conf-med    { border-bottom-color: var(--accent-soft, #4d8df080); border-bottom-style: solid; }
-.fn-source-code .src-link.conf-low    { border-bottom-color: var(--accent-soft, #4d8df080); border-bottom-style: dashed; }
-.fn-source-code .src-link.import      { border-bottom: 1px solid var(--accent, #4d8df0); }
-.fn-source-code .src-link.unresolved  { border-bottom: 1px dotted var(--muted, #888); cursor: help; }
+.fn-source-code .src-link.kind-function,
+.fn-source-code .src-link.kind-class,
+.fn-source-code .src-link.kind-import {
+  cursor: pointer;
+}
+.fn-source-code .src-link.kind-function:hover,
+.fn-source-code .src-link.kind-class:hover,
+.fn-source-code .src-link.kind-import:hover { color: var(--accent, #4d8df0); }
+.fn-source-code .src-link.kind-ambiguous {
+  cursor: pointer;
+  text-decoration: underline dotted var(--muted, #888);
+  text-underline-offset: 2px;
+}
+.fn-source-code .src-link.kind-unresolved {
+  text-decoration: underline dashed var(--muted, #888);
+  text-underline-offset: 2px;
+}
 
 /* Source popover (reader-mode) */
 .src-popover {
@@ -1592,6 +1602,17 @@ button, input, select { font: inherit; color: inherit; }
   font-size: 11px; cursor: pointer;
 }
 .src-pop-btn:hover { background: var(--hover, #222); }
+.src-pop-warn { margin-top: 4px; color: var(--accent, #4d8df0); font-size: 0.85em; }
+.src-pop-candidates { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+.src-pop-candidate {
+  text-align: left;
+  background: var(--bg3, #222);
+  color: var(--fg, #eee);
+  border: 1px solid var(--border, #333);
+  padding: 4px 6px; border-radius: 4px;
+  cursor: pointer; font: inherit; font-size: 0.9em;
+}
+.src-pop-candidate:hover { border-color: var(--accent, #4d8df0); }
 
 /* Flow tab (reader-mode) */
 .flow-doc {
