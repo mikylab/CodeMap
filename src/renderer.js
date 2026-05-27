@@ -26,6 +26,12 @@ function renderWorkspaceShell() {
   const root = document.getElementById('workspace');
   clear(root);
   root.appendChild(renderWorkspace(renderAll));
+  if (STATE.pendingScrollTop != null) {
+    const target = STATE.pendingScrollTop;
+    STATE.pendingScrollTop = null;
+    const body = root.querySelector('.ws-body');
+    if (body) body.scrollTop = target;
+  }
 }
 
 document.addEventListener('codemap:rerender', renderAll);
