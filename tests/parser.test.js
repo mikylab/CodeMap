@@ -359,3 +359,54 @@ test('parser: class line has empty params', () => {
   const fn = parseFile('a.py', src, 'a.py').fns[0];
   assertDeepEqual(fn.params, []);
 });
+
+test('parser: python local variables on LHS of assignment captured', () => {
+  const src = [
+    'def handle():',
+    '    user = get_user()',
+    '    config = {"a": 1}',
+    '    user == None  # not an assignment',
+    '    return user',
+  ].join('\n');
+  const file = parseFile('a.py', src, 'a.py');
+  const fn = file.fns.find(f => f.name === 'handle');
+  assertTrue(fn.locals.includes('user'), 'user');
+  assertTrue(fn.locals.includes('config'), 'config');
+  assertEqual(fn.locals.filter(n => n === 'user').length, 1, 'user not duplicated');
+});
+
+test('parser: js local variables from const/let/var captured', () => {
+  const src = [
+    'function go() {',
+    '  const a = 1;',
+    '  let b = 2;',
+    '  var c = 3;',
+    '  return a + b + c;',
+    '}',
+  ].join('\n');
+  const file = parseFile('a.js', src, 'a.js');
+  const fn = file.fns.find(f => f.name === 'go');
+  assertTrue(fn.locals.includes('a'));
+  assertTrue(fn.locals.includes('b'));
+  assertTrue(fn.locals.includes('c'));
+});
+
+test('parser: js destructuring locals split into individual names', () => {
+  const src = [
+    'function go() {',
+    '  const { x, y } = obj;',
+    '  return x + y;',
+    '}',
+  ].join('\n');
+  const file = parseFile('a.js', src, 'a.js');
+  const fn = file.fns.find(f => f.name === 'go');
+  assertTrue(fn.locals.includes('x'), 'x');
+  assertTrue(fn.locals.includes('y'), 'y');
+});
+
+test('parser: locals never include comparison ==', () => {
+  const src = `def go():\n    a == b\n    return 1\n`;
+  const file = parseFile('a.py', src, 'a.py');
+  const fn = file.fns.find(f => f.name === 'go');
+  assertFalse(fn.locals.includes('a'));
+});
