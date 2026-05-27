@@ -1655,37 +1655,37 @@ button, input, select { font: inherit; color: inherit; }
 .src-popover {
   position: fixed; z-index: 1000;
   min-width: 240px; max-width: 360px;
-  background: var(--bg-elev, #1a1a1a); color: var(--fg, #eee);
-  border: 1px solid var(--border, #333); border-radius: 6px;
+  background: var(--bg2); color: var(--text);
+  border: 1px solid var(--border2); border-radius: 6px;
   padding: 8px 10px; font-size: 12px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
   opacity: 0; pointer-events: none;
   transition: opacity 80ms ease;
 }
 .src-popover.show { opacity: 1; pointer-events: auto; }
 .src-pop-head { display: flex; gap: 6px; align-items: baseline; margin-bottom: 4px; }
-.src-pop-icon { color: var(--accent, #4d8df0); }
-.src-pop-name { font-weight: 600; }
-.src-pop-loc { font-size: 11px; color: var(--muted, #888); margin-left: auto; }
-.src-pop-doc { color: var(--fg-soft, #aaa); margin: 4px 0; line-height: 1.4; white-space: pre-wrap; }
+.src-pop-icon { color: var(--accent); }
+.src-pop-name { font-weight: 600; color: var(--text); }
+.src-pop-loc { font-size: 11px; color: var(--muted); margin-left: auto; }
+.src-pop-doc { color: var(--muted); margin: 4px 0; line-height: 1.4; white-space: pre-wrap; }
 .src-pop-actions { display: flex; gap: 6px; margin-top: 6px; }
 .src-pop-btn {
-  background: transparent; border: 1px solid var(--border, #333);
-  color: var(--fg, #eee); padding: 2px 8px; border-radius: 4px;
+  background: transparent; border: 1px solid var(--border2);
+  color: var(--text); padding: 2px 8px; border-radius: 4px;
   font-size: 11px; cursor: pointer;
 }
-.src-pop-btn:hover { background: var(--hover, #222); }
-.src-pop-warn { margin-top: 4px; color: var(--accent, #4d8df0); font-size: 0.85em; }
+.src-pop-btn:hover { background: var(--bg3); }
+.src-pop-warn { margin-top: 4px; color: var(--accent); font-size: 0.85em; }
 .src-pop-candidates { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
 .src-pop-candidate {
   text-align: left;
-  background: var(--bg3, #222);
-  color: var(--fg, #eee);
-  border: 1px solid var(--border, #333);
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--border2);
   padding: 4px 6px; border-radius: 4px;
   cursor: pointer; font: inherit; font-size: 0.9em;
 }
-.src-pop-candidate:hover { border-color: var(--accent, #4d8df0); }
+.src-pop-candidate:hover { border-color: var(--accent); }
 
 /* Flow tab (reader-mode) */
 .flow-doc {
