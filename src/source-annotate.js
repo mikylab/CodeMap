@@ -7,13 +7,20 @@ import { resolve } from './resolver.js';
 
 const IDENT_RE = /\b([A-Za-z_]\w*)\b/g;
 
+const BUDGET_MS = 300;
+
 export function annotateFile(file, state) {
   const byLine = new Map();
   if (!file || !file.src) return { byLine };
 
+  const start = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
   const fnAtLine = buildFnAtLine(file);
   const lines = file.src.split('\n');
   for (let i = 0; i < lines.length; i++) {
+    if (start && (performance.now() - start) > BUDGET_MS) {
+      console.warn(`annotateFile budget exceeded after ${i}/${lines.length} lines on ${file.path}`);
+      return { byLine, partial: true };
+    }
     const lineNum = i + 1;
     const raw = lines[i];
     const stripped = stripLineComment(raw, file.ext);
