@@ -1555,18 +1555,101 @@ button, input, select { font: inherit; color: inherit; }
 }
 .ws-readme-toggle:hover { text-decoration: underline; }
 
-/* Interactive source links (reader-mode) */
+/* ─── IDE-style source colouring ─────────────────────────────────────────
+   Passive syntax tokens (string/comment/keyword/number) get persistent
+   colours for scannability. Resolved identifiers get colour + affordance:
+   clickable kinds underline on hover; hover-only kinds tint on hover.
+   Palette derived from the existing theme variables so it tracks light/dark
+   mode without a second palette.
+
+   Token colour palette (light theme — vars override in dark):
+     --tok-keyword  : purple   (def / class / if / return / ...)
+     --tok-string   : green    ("hello", 'x', `t`)
+     --tok-comment  : muted    (line and block comments)
+     --tok-number   : amber    (42, 3.14, 0xFF)
+     --tok-function : accent   (clickable functions)
+     --tok-class    : teal     (clickable classes)
+     --tok-import   : warn     (clickable imports)
+     --tok-builtin  : purple-soft (console, len, print, ...)
+     --tok-param    : text     (italic)
+     --tok-local    : text     (no colour, default)
+*/
+:root {
+  --tok-keyword:  #7F77DD;
+  --tok-string:   #1D9E75;
+  --tok-comment:  #8a887e;
+  --tok-number:   #BA7517;
+  --tok-function: #3B8BD4;
+  --tok-class:    #5DCAA5;
+  --tok-import:   #BA7517;
+  --tok-builtin:  #9b6cc4;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --tok-keyword:  #b8b0ff;
+    --tok-string:   #7cd6a8;
+    --tok-comment:  #8a887e;
+    --tok-number:   #e3a060;
+    --tok-function: #79b8ff;
+    --tok-class:    #88e0bc;
+    --tok-import:   #e3a060;
+    --tok-builtin:  #c7a2e5;
+  }
+}
+
+.fn-source-code .tok-keyword { color: var(--tok-keyword); font-weight: 500; }
+.fn-source-code .tok-string  { color: var(--tok-string); }
+.fn-source-code .tok-comment { color: var(--tok-comment); font-style: italic; }
+.fn-source-code .tok-number  { color: var(--tok-number); }
+
+/* Interactive identifier links — coloured + affordance per kind.
+     - Clickable kinds (function/class/import) carry their token colour and
+       a subtle solid underline so they're scannable AND obviously clickable.
+     - Ambiguous gets a dotted warn-colour underline.
+     - Hover-only kinds (param/local/builtin) tint on hover to signal info
+       availability; builtin/param also carry a colour at rest.
+     - Unresolved is uncoloured to avoid visual clutter — tooltip still works. */
 .fn-source-code .src-link {
   background: transparent; border: none; padding: 0; margin: 0;
-  font: inherit; color: inherit; cursor: pointer;
-  border-bottom: 1px dashed transparent;
+  font: inherit; color: inherit; cursor: help;
+  text-decoration: none;
 }
-.fn-source-code .src-link:hover { color: var(--accent, #4d8df0); }
-.fn-source-code .src-link.conf-high   { border-bottom-color: var(--accent, #4d8df0); border-bottom-style: solid; }
-.fn-source-code .src-link.conf-med    { border-bottom-color: var(--accent-soft, #4d8df080); border-bottom-style: solid; }
-.fn-source-code .src-link.conf-low    { border-bottom-color: var(--accent-soft, #4d8df080); border-bottom-style: dashed; }
-.fn-source-code .src-link.import      { border-bottom: 1px solid var(--accent, #4d8df0); }
-.fn-source-code .src-link.unresolved  { border-bottom: 1px dotted var(--muted, #888); cursor: help; }
+.fn-source-code .src-link.kind-function {
+  cursor: pointer; color: var(--tok-function);
+  text-decoration: underline solid color-mix(in srgb, var(--tok-function) 35%, transparent);
+  text-underline-offset: 2px; text-decoration-thickness: 1px;
+}
+.fn-source-code .src-link.kind-class {
+  cursor: pointer; color: var(--tok-class);
+  text-decoration: underline solid color-mix(in srgb, var(--tok-class) 35%, transparent);
+  text-underline-offset: 2px; text-decoration-thickness: 1px;
+}
+.fn-source-code .src-link.kind-import {
+  cursor: pointer; color: var(--tok-import);
+  text-decoration: underline solid color-mix(in srgb, var(--tok-import) 35%, transparent);
+  text-underline-offset: 2px; text-decoration-thickness: 1px;
+}
+.fn-source-code .src-link.kind-function:hover,
+.fn-source-code .src-link.kind-class:hover,
+.fn-source-code .src-link.kind-import:hover {
+  text-decoration-color: currentColor;
+}
+.fn-source-code .src-link.kind-ambiguous {
+  cursor: pointer; color: var(--tok-import);
+  text-decoration: underline dotted var(--warn, #BA7517);
+  text-underline-offset: 2px;
+}
+.fn-source-code .src-link.kind-builtin { color: var(--tok-builtin); }
+.fn-source-code .src-link.kind-param   { font-style: italic; }
+.fn-source-code .src-link.kind-param:hover,
+.fn-source-code .src-link.kind-local:hover,
+.fn-source-code .src-link.kind-builtin:hover {
+  background: var(--bg3);
+  border-radius: 2px;
+}
+.fn-source-code .src-link.kind-unresolved {
+  text-decoration: none;
+}
 
 /* Source popover (reader-mode) */
 .src-popover {
@@ -1592,6 +1675,17 @@ button, input, select { font: inherit; color: inherit; }
   font-size: 11px; cursor: pointer;
 }
 .src-pop-btn:hover { background: var(--hover, #222); }
+.src-pop-warn { margin-top: 4px; color: var(--accent, #4d8df0); font-size: 0.85em; }
+.src-pop-candidates { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+.src-pop-candidate {
+  text-align: left;
+  background: var(--bg3, #222);
+  color: var(--fg, #eee);
+  border: 1px solid var(--border, #333);
+  padding: 4px 6px; border-radius: 4px;
+  cursor: pointer; font: inherit; font-size: 0.9em;
+}
+.src-pop-candidate:hover { border-color: var(--accent, #4d8df0); }
 
 /* Flow tab (reader-mode) */
 .flow-doc {

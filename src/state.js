@@ -11,6 +11,7 @@ const EMPTY_ANALYSIS = {
   callsByFn: new Map(), callersByFn: new Map(), callEdges: [],
   fanIn: new Map(), fanOut: new Map(),
   fileImports: new Map(), fileImporters: new Map(),
+  resolveIndex: new Map(),
 };
 
 export const STATE = {
@@ -29,6 +30,7 @@ export const STATE = {
   selectedLineageBranch: null,     // branch name | null
   lastRepoMeta: null,              // { host, owner, repo, ref, ... } | null — set after a git-URL load
   pendingHashParts: null,          // { file?, fn?, doc? } — hash fields applyHash couldn't resolve; preserved by serializeState so unresolved shared links survive renderAll
+  pendingScrollTop: null,          // scrollTop to apply to .ws-body after the next render — set by restoreSnapshot so back-nav returns to your prior scroll position
   edges: [],
   degree: new Map(),
   libToPaths: new Map(),
@@ -58,6 +60,7 @@ export const STATE = {
   graphHideIsolated: true,
   fileImports: new Map(),
   fileImporters: new Map(),
+  resolveIndex: new Map(),
   effects: new Map(),
   fileEffects: new Map(),
   fnEffectFilter: new Set(),
@@ -101,6 +104,7 @@ export function setFiles(files, analysis = EMPTY_ANALYSIS) {
   STATE.fanOut = analysis.fanOut || new Map();
   STATE.fileImports = analysis.fileImports || new Map();
   STATE.fileImporters = analysis.fileImporters || new Map();
+  STATE.resolveIndex = analysis.resolveIndex || new Map();
   computeEffects(STATE);
   STATE.smells = detectSmells(STATE);
   STATE.smellsByFile = indexSmellsByFile(STATE.smells);
@@ -457,11 +461,21 @@ export function clearHistory() {
   STATE.history = [];
 }
 
+function readWorkspaceScroll() {
+  if (typeof document === 'undefined') return null;
+  const body = document.querySelector('.ws-body');
+  return body ? body.scrollTop : null;
+}
+
 export function captureSnapshot() {
-  if (STATE.selectedDoc) return { kind: 'doc', docPath: STATE.selectedDoc };
-  if (STATE.selectedFnKey) return { kind: 'fn', fnKey: STATE.selectedFnKey, mode: STATE.detailMode };
-  if (STATE.selectedPath) return { kind: 'file', path: STATE.selectedPath, mode: STATE.detailMode };
-  return { kind: 'repo', mode: STATE.detailMode };
+  let snap;
+  if (STATE.selectedDoc) snap = { kind: 'doc', docPath: STATE.selectedDoc };
+  else if (STATE.selectedFnKey) snap = { kind: 'fn', fnKey: STATE.selectedFnKey, mode: STATE.detailMode };
+  else if (STATE.selectedPath) snap = { kind: 'file', path: STATE.selectedPath, mode: STATE.detailMode };
+  else snap = { kind: 'repo', mode: STATE.detailMode };
+  const scroll = readWorkspaceScroll();
+  if (scroll) snap.scroll = scroll;
+  return snap;
 }
 
 export function restoreSnapshot(snap) {
@@ -477,6 +491,7 @@ export function restoreSnapshot(snap) {
     if (fn) selectFn(fn); else clearSelection();
   }
   STATE.detailMode = snap.mode || 'summary';
+  STATE.pendingScrollTop = typeof snap.scroll === 'number' ? snap.scroll : null;
 }
 
 export function goBack() {

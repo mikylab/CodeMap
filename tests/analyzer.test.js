@@ -110,3 +110,25 @@ test('callgraph: same-file beats imported when both exist', () => {
   assertEqual(edge.target, fnKey(localB));
   assertEqual(edge.confidence, 'high');
 });
+
+test('analyze: resolveIndex contains functions, classes, imports by name', () => {
+  const files = [
+    { path: 'a.py', ext: 'py', imports: [{ from: 'a.py', lib: 'torch' }], localImports: [],
+      fns: [
+        { name: 'handle_req', file: 'a.py', lineNum: 5 },
+        { name: 'User', file: 'a.py', lineNum: 12 },
+      ] },
+    { path: 'b.py', ext: 'py', imports: [], localImports: [],
+      fns: [{ name: 'handle_req', file: 'b.py', lineNum: 8 }] },
+  ];
+  const result = analyze(files);
+  const handleEntries = result.resolveIndex.get('handle_req') || [];
+  assertEqual(handleEntries.length, 2);
+  assertTrue(handleEntries.every(e => e.kind === 'function'));
+  const userEntries = result.resolveIndex.get('User') || [];
+  assertEqual(userEntries[0].kind, 'class');
+  const torchEntries = result.resolveIndex.get('torch') || [];
+  assertEqual(torchEntries.length, 1);
+  assertEqual(torchEntries[0].kind, 'import');
+  assertEqual(torchEntries[0].file, 'a.py');
+});

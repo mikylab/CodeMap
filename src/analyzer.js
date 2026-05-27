@@ -41,8 +41,48 @@ export function analyze(files) {
   const callGraph = buildCallGraph(files);
   const fileGraph = buildFileImportGraph(files);
 
+  const resolveIndex = buildResolveIndex(files);
+
   measure('analyze', t0, `files=${files.length} libs=${libToPaths.size} edges=${unique.length} callEdges=${callGraph.callEdges.length}`);
-  return { edges: unique, degree, libToPaths, ...callGraph, ...fileGraph };
+  return { edges: unique, degree, libToPaths, ...callGraph, ...fileGraph, resolveIndex };
+}
+
+function buildResolveIndex(files) {
+  const idx = new Map();
+  const add = (name, entry) => {
+    let arr = idx.get(name);
+    if (!arr) idx.set(name, arr = []);
+    arr.push(entry);
+  };
+  for (const f of files) {
+    for (const fn of (f.fns || [])) {
+      add(fn.name, {
+        kind: classifyDef(fn.name, f.ext),
+        file: f.path,
+        lineNum: fn.lineNum,
+      });
+    }
+    for (const im of (f.imports || [])) {
+      if (!im.lib) continue;
+      add(im.lib, { kind: 'import', file: f.path, lineNum: 1, lib: im.lib });
+    }
+    // Python `from pkg import Name` — surface the imported names so types and
+    // helpers brought in via from-imports resolve in the Source view.
+    for (const im of (f.fromImportNames || [])) {
+      if (!im.name) continue;
+      add(im.name, { kind: 'import', file: f.path, lineNum: 1, lib: im.lib });
+    }
+  }
+  for (const arr of idx.values()) {
+    arr.sort((a, b) => a.file.localeCompare(b.file) || a.lineNum - b.lineNum);
+  }
+  return idx;
+}
+
+const PASCAL_LANGS = new Set(['py', 'js', 'ts', 'tsx', 'jsx', 'rb']);
+function classifyDef(name, ext) {
+  if (/^[A-Z]/.test(name) && PASCAL_LANGS.has(ext)) return 'class';
+  return 'function';
 }
 
 function buildFileImportGraph(files) {

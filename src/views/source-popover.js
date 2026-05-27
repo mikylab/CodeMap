@@ -33,20 +33,33 @@ function onOut(e) {
 
 function showFor(link) {
   const kind = link.dataset.kind;
-  const target = link.dataset.target;
   if (!kind) return;
   let content = null;
-  if (kind === 'call' && target) {
-    const fn = STATE.fnByKey.get(target);
-    if (!fn) return;
-    content = renderFnCard(fn);
-  } else if (kind === 'import' && target) {
-    const f = STATE.byPath.get(target);
-    if (!f) return;
-    content = renderFileCard(f);
-  } else {
-    return;
+
+  if (kind === 'function' || kind === 'class') {
+    const file = link.dataset.file;
+    const lineNum = Number(link.dataset.line);
+    const f = STATE.byPath.get(file);
+    const fn = (f?.fns || []).find(x => x.lineNum === lineNum);
+    content = fn ? renderFnCard(fn) : renderDefCard(kind, link.dataset.label, file, lineNum);
+  } else if (kind === 'import') {
+    const f = STATE.byPath.get(link.dataset.file);
+    content = f ? renderFileCard(f) : renderSimpleCard('import', `${link.dataset.label} — ${link.dataset.file}`);
+  } else if (kind === 'param') {
+    content = renderInfoCard('parameter', `parameter of ${link.dataset.context || '?'}`, link.dataset.shadowed);
+  } else if (kind === 'local') {
+    content = renderInfoCard('local', `local in ${link.dataset.context || '?'}`, link.dataset.shadowed);
+  } else if (kind === 'builtin') {
+    content = renderInfoCard('builtin', `builtin — ${link.dataset.language || ''}`, null);
+  } else if (kind === 'ambiguous') {
+    let candidates = [];
+    try { candidates = JSON.parse(link.dataset.candidates || '[]'); } catch (_) {}
+    content = renderAmbiguousCard(link.dataset.label, candidates);
+  } else if (kind === 'unresolved') {
+    content = renderInfoCard('unresolved', "couldn't resolve — likely external or dynamic", null);
   }
+
+  if (!content) return;
   ensurePopover();
   popover.replaceChildren(content);
   position(link);
@@ -123,4 +136,72 @@ function renderFileCard(f) {
     wrap.appendChild(el('div', { cls: 'src-pop-doc', text: truncated }));
   }
   return wrap;
+}
+
+function renderDefCard(kind, label, file, lineNum) {
+  const wrap = el('div', { cls: 'src-pop-card' });
+  const head = el('div', { cls: 'src-pop-head' });
+  head.appendChild(el('span', { cls: 'src-pop-icon', text: iconFor(kind) }));
+  head.appendChild(el('span', { cls: 'src-pop-name', text: label }));
+  head.appendChild(el('span', { cls: 'src-pop-loc', text: `${file}:${lineNum}` }));
+  wrap.appendChild(head);
+  return wrap;
+}
+
+function renderInfoCard(kind, text, shadowedJson) {
+  const wrap = el('div', { cls: 'src-pop-card' });
+  const head = el('div', { cls: 'src-pop-head' });
+  head.appendChild(el('span', { cls: 'src-pop-icon', text: iconFor(kind) }));
+  head.appendChild(el('span', { cls: 'src-pop-name', text }));
+  wrap.appendChild(head);
+  if (shadowedJson) {
+    try {
+      const s = JSON.parse(shadowedJson);
+      wrap.appendChild(el('div', { cls: 'src-pop-warn',
+        text: `! shadows ${s.kind} defined at line ${s.lineNum}` }));
+    } catch (_) {}
+  }
+  return wrap;
+}
+
+function renderAmbiguousCard(label, candidates) {
+  const wrap = el('div', { cls: 'src-pop-card' });
+  const head = el('div', { cls: 'src-pop-head' });
+  head.appendChild(el('span', { cls: 'src-pop-icon', text: '?' }));
+  head.appendChild(el('span', { cls: 'src-pop-name',
+    text: `${label} — ambiguous (${candidates.length} candidates)` }));
+  wrap.appendChild(head);
+  const list = el('div', { cls: 'src-pop-candidates' });
+  for (const c of candidates) {
+    list.appendChild(el('button', {
+      cls: 'src-pop-candidate', type: 'button',
+      text: `${c.file}:${c.lineNum}`,
+      on: { click: () => {
+        const f = STATE.byPath.get(c.file);
+        const fn = (f?.fns || []).find(x => x.lineNum === c.lineNum);
+        pushHistory(captureSnapshot());
+        if (fn) { selectFn(fn); setDetailMode('source'); }
+        hide();
+        document.dispatchEvent(new CustomEvent('codemap:rerender'));
+      } },
+    }));
+  }
+  wrap.appendChild(list);
+  return wrap;
+}
+
+function renderSimpleCard(kind, text) {
+  const wrap = el('div', { cls: 'src-pop-card' });
+  const head = el('div', { cls: 'src-pop-head' });
+  head.appendChild(el('span', { cls: 'src-pop-icon', text: iconFor(kind) }));
+  head.appendChild(el('span', { cls: 'src-pop-name', text }));
+  wrap.appendChild(head);
+  return wrap;
+}
+
+function iconFor(kind) {
+  return ({
+    function: 'ƒ', class: '◇', import: '↗',
+    param: '◯', local: '·', builtin: '★', unresolved: '?', parameter: '◯',
+  })[kind] || '·';
 }

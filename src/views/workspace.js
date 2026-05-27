@@ -767,38 +767,65 @@ function renderAnnotatedLine(parent, lineText, annots) {
 }
 
 function makeAnnotElement(a, tok) {
-  if (a.kind === 'call' && a.conf !== 'unresolved') {
+  // Passive syntax tokens — no popover, no click; pure colouring.
+  if (a.kind === 'string' || a.kind === 'comment' || a.kind === 'keyword' || a.kind === 'number') {
+    return el('span', { cls: `tok-${a.kind}`, text: tok });
+  }
+  if (a.kind === 'function' || a.kind === 'class') {
     return el('button', {
-      cls: `src-link conf-${a.conf}`,
+      cls: `src-link kind-${a.kind}`,
       type: 'button', text: tok,
-      attrs: { 'data-target': a.target, 'data-kind': 'call' },
-      on: { click: () => {
-        const fn = STATE.fnByKey.get(a.target);
-        if (!fn) return;
-        pushHistory(captureSnapshot());
-        selectFn(fn);
-        STATE.detailMode = 'source';
-        document.dispatchEvent(new CustomEvent('codemap:rerender'));
-      } },
+      attrs: { 'data-kind': a.kind, 'data-file': a.file, 'data-line': String(a.lineNum), 'data-label': a.label },
+      on: { click: () => jumpToDef(a) },
     });
   }
   if (a.kind === 'import') {
     return el('button', {
-      cls: 'src-link import',
+      cls: 'src-link kind-import',
       type: 'button', text: tok,
-      attrs: { 'data-target': a.target, 'data-kind': 'import' },
+      attrs: { 'data-kind': 'import', 'data-file': a.file, 'data-label': a.label },
       on: { click: () => {
         pushHistory(captureSnapshot());
-        selectFile(a.target);
+        selectFile(a.file);
         document.dispatchEvent(new CustomEvent('codemap:rerender'));
       } },
     });
   }
+  if (a.kind === 'ambiguous') {
+    return el('button', {
+      cls: 'src-link kind-ambiguous',
+      type: 'button', text: tok,
+      attrs: { 'data-kind': 'ambiguous', 'data-label': a.label,
+               'data-candidates': JSON.stringify(a.candidates) },
+      on: { click: e => e.preventDefault() },
+    });
+  }
+  if (a.kind === 'param' || a.kind === 'local' || a.kind === 'builtin') {
+    return el('span', {
+      cls: `src-link kind-${a.kind}`,
+      text: tok,
+      attrs: {
+        'data-kind': a.kind, 'data-label': a.label, tabindex: '0',
+        ...(a.context ? { 'data-context': a.context } : {}),
+        ...(a.language ? { 'data-language': a.language } : {}),
+        ...(a.shadowed ? { 'data-shadowed': JSON.stringify(a.shadowed) } : {}),
+      },
+    });
+  }
   return el('span', {
-    cls: 'src-link unresolved',
+    cls: 'src-link kind-unresolved',
     text: tok,
-    attrs: { 'data-kind': 'call', 'data-conf': 'unresolved', tabindex: '0', title: 'external or unresolved' },
+    attrs: { 'data-kind': 'unresolved', 'data-label': a.label, tabindex: '0' },
   });
+}
+
+function jumpToDef(a) {
+  pushHistory(captureSnapshot());
+  const f = STATE.byPath.get(a.file);
+  const fn = (f?.fns || []).find(x => x.lineNum === a.lineNum);
+  if (fn) { selectFn(fn); STATE.detailMode = 'source'; }
+  else { selectFile(a.file); }
+  document.dispatchEvent(new CustomEvent('codemap:rerender'));
 }
 
 function extractFnSource(fn) {

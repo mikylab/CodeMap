@@ -30,13 +30,14 @@ export function parseFile(name, src, path) {
   const fns = extractFns(src, cfg, path, newlines, ext);
   const imports = extractImports(src, cfg, path);
   const localImports = extractLocalImports(src, cfg, ext);
+  const fromImportNames = ext === 'py' ? extractFromImportNames(src) : [];
   const cx = clamp((1 + decisionCount(src)) / Math.max(fns.length, 1), 1, 30);
 
   return {
     name, path, ext,
     lang: cfg.name, langColor: cfg.color,
     lineCount: newlines.length + 1,
-    fns, imports, localImports, cx,
+    fns, imports, localImports, fromImportNames, cx,
     fileDoc: extractFileDoc(src, cfg),
     src,
   };
@@ -72,6 +73,7 @@ function extractFns(src, cfg, path, newlines, ext) {
     const callText = stripNoise(body.text, ext);
     const paramNames = signatureParamNames(src, idx);
     const params = extractParams(src, idx);
+    const locals = extractLocals(callText, cfg);
     const nlAfter = src.indexOf('\n', idx);
     const bodyStartIdx = nlAfter < 0 ? src.length : nlAfter + 1;
     const doc = extractDocBefore(src, idx, cfg)
@@ -84,6 +86,7 @@ function extractFns(src, cfg, path, newlines, ext) {
       calls: extractCalls(callText, name, paramNames),
       doc: doc || null,
       params,
+      locals,
     });
   });
   return out;
@@ -223,28 +226,45 @@ function stripNoise(text, ext) {
 // and line numbers still line up with the original source. Used before
 // structural (fn/class) regex matching so prose inside docstrings, comments, and
 // string literals can't be mistaken for code.
-function maskLiterals(src, ext) {
+export function maskLiterals(src, ext) {
+  return classifySource(src, ext).masked;
+}
+
+// Single-pass lexer for string/comment regions. Returns the same masked source
+// as `maskLiterals` plus a parallel Uint8Array `kinds` of the same length:
+//   0 = code, 1 = string, 2 = comment.
+// Used by source-annotate.js to colour strings and comments without
+// re-tokenizing the whole file.
+export function classifySource(src, ext) {
   const py = ext === 'py';
   const jsFam = ext === 'js' || ext === 'mjs' || ext === 'cjs' ||
                 ext === 'ts' || ext === 'tsx' || ext === 'jsx' ||
                 ext === 'vue' || ext === 'svelte';
-  if (!py && !jsFam) return src;
-  const out = src.split('');
   const n = src.length;
-  const blank = (a, b) => { for (let i = a; i < b && i < n; i++) if (out[i] !== '\n') out[i] = ' '; };
+  const out = src.split('');
+  const kinds = new Uint8Array(n);
+  if (!py && !jsFam) return { masked: src, kinds };
+  const setRange = (a, b, k) => {
+    for (let i = a; i < b && i < n; i++) {
+      if (out[i] !== '\n') {
+        out[i] = ' ';
+        kinds[i] = k;
+      }
+    }
+  };
   let i = 0;
   while (i < n) {
     const c = src[i];
-    if (py && c === '#') { let j = i; while (j < n && src[j] !== '\n') j++; blank(i, j); i = j; continue; }
-    if (jsFam && c === '/' && src[i + 1] === '/') { let j = i; while (j < n && src[j] !== '\n') j++; blank(i, j); i = j; continue; }
+    if (py && c === '#') { let j = i; while (j < n && src[j] !== '\n') j++; setRange(i, j, 2); i = j; continue; }
+    if (jsFam && c === '/' && src[i + 1] === '/') { let j = i; while (j < n && src[j] !== '\n') j++; setRange(i, j, 2); i = j; continue; }
     if (jsFam && c === '/' && src[i + 1] === '*') {
       let j = i + 2; while (j < n && !(src[j] === '*' && src[j + 1] === '/')) j++;
-      j = Math.min(j + 2, n); blank(i, j); i = j; continue;
+      j = Math.min(j + 2, n); setRange(i, j, 2); i = j; continue;
     }
     if (py && (c === '"' || c === "'") && src[i + 1] === c && src[i + 2] === c) {
       const q = c; let j = i + 3;
       while (j < n && !(src[j] === q && src[j + 1] === q && src[j + 2] === q)) j++;
-      j = Math.min(j + 3, n); blank(i, j); i = j; continue;
+      j = Math.min(j + 3, n); setRange(i, j, 1); i = j; continue;
     }
     if (c === '"' || c === "'" || (jsFam && c === '`')) {
       const q = c; let j = i + 1;
@@ -254,13 +274,13 @@ function maskLiterals(src, ext) {
         else j++;
       }
       const closed = src[j] === q;
-      blank(i, closed ? j + 1 : j);
+      setRange(i, closed ? j + 1 : j, 1);
       i = closed ? j + 1 : j;
       continue;
     }
     i++;
   }
-  return out.join('');
+  return { masked: out.join(''), kinds };
 }
 
 function extractCalls(bodyText, ownName, params) {
@@ -340,6 +360,36 @@ function extractLocalImports(src, cfg, ext) {
   return out;
 }
 
+// Python `from pkg import a, b as c, D` — return the imported names (and
+// `as` aliases when present). These names land in the resolveIndex so types
+// brought in via `from typing import Optional, Dict, Any` resolve in the
+// Source view rather than appearing as unresolved.
+function extractFromImportNames(src) {
+  const out = [];
+  const seen = new Set();
+  const re = /^[ \t]*from\s+(\.*[\w.]*)\s+import\s+(?:\(([\s\S]*?)\)|([^\n#]+))/gm;
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    const pkg = (m[1] || '').replace(/^\.+/, '') || '<relative>';
+    const body = (m[2] != null ? m[2] : m[3]).replace(/\\\n/g, ' ');
+    const tokens = body.split(/[,\s]+/).filter(Boolean);
+    for (let i = 0; i < tokens.length; i++) {
+      const tok = tokens[i];
+      if (tok === 'as' || tok === '*') continue;
+      if (!/^[A-Za-z_]\w*$/.test(tok)) continue;
+      let name = tok;
+      if (tokens[i + 1] === 'as' && tokens[i + 2] && /^[A-Za-z_]\w*$/.test(tokens[i + 2])) {
+        name = tokens[i + 2];
+        i += 2;
+      }
+      if (seen.has(name)) continue;
+      seen.add(name);
+      out.push({ name, lib: pkg });
+    }
+  }
+  return out;
+}
+
 function newlineIndices(src) {
   const out = [];
   for (let i = 0; i < src.length; i++) if (src.charCodeAt(i) === 10) out.push(i);
@@ -381,6 +431,26 @@ function decisionCount(s) {
   let n = 0;
   while (re.exec(s) !== null) n++;
   return n;
+}
+
+function extractLocals(bodyText, cfg) {
+  if (!cfg.locals || !cfg.locals.length) return [];
+  const out = new Set();
+  for (const re of cfg.locals) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(bodyText)) !== null) {
+      const raw = m[1];
+      if (!raw) continue;
+      for (const tok of raw.split(/[,\s]+/)) {
+        const cleaned = tok.replace(/^\.\.\./, '').split(':')[0].trim();
+        if (!/^[A-Za-z_]\w*$/.test(cleaned)) continue;
+        if (KEYWORDS.has(cleaned)) continue;
+        out.add(cleaned);
+      }
+    }
+  }
+  return [...out].sort();
 }
 
 function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
