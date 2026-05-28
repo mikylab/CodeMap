@@ -1,5 +1,6 @@
-import { STATE } from './state.js';
+import { STATE, importDismissed } from './state.js';
 import { el } from './dom.js';
+import { repoIdentity, triageExportPayload, parseTriageImport } from './triage.js';
 
 const KIND_DESCRIPTIONS = {
   'unresolved-call':    'Call to a name that no in-codebase function defines and no import provides — possibly hallucinated, dead, or relying on an undocumented global.',
@@ -48,9 +49,71 @@ export function smellExportBar(smells, slug) {
   });
   wrap.appendChild(dlBtn);
 
+  wrap.appendChild(triageExportBtn(slug));
+  wrap.appendChild(triageImportBtn());
+
   wrap.appendChild(el('span', { cls: 'smell-export-count',
     text: `${smells.length} finding${smells.length === 1 ? '' : 's'}` }));
   return wrap;
+}
+
+function triageExportBtn(slug) {
+  const btn = el('button', {
+    cls: 'smell-export-btn', type: 'button',
+    text: 'Export triage',
+    title: 'Download dismissed findings as JSON',
+  });
+  btn.addEventListener('click', () => {
+    const repoId = repoIdentity(STATE);
+    const payload = triageExportPayload(repoId, STATE.dismissedSmells);
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `codemap-triage-${slug || 'export'}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    flashLabel(btn, `Exported ${STATE.dismissedSmells.size}`);
+  });
+  return btn;
+}
+
+function triageImportBtn() {
+  const btn = el('button', {
+    cls: 'smell-export-btn', type: 'button',
+    text: 'Import triage',
+    title: 'Merge dismissed findings from a JSON file',
+  });
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'application/json,.json';
+  input.style.display = 'none';
+  input.addEventListener('change', async () => {
+    const file = input.files && input.files[0];
+    input.value = '';
+    if (!file) return;
+    let text;
+    try { text = await file.text(); }
+    catch { flashLabel(btn, 'Read failed'); return; }
+    const parsed = parseTriageImport(text);
+    if (!parsed.ok) { flashLabel(btn, 'Invalid file'); return; }
+    const currentId = repoIdentity(STATE);
+    if (parsed.repoId && currentId && parsed.repoId !== currentId) {
+      const ok = window.confirm(
+        `This triage file is from a different repo (${parsed.repoId}). Import anyway?`
+      );
+      if (!ok) return;
+    }
+    const added = importDismissed(parsed.dismissed);
+    flashLabel(btn, `Imported ${added}`);
+    document.dispatchEvent(new Event('codemap:rerender'));
+  });
+  btn.addEventListener('click', () => input.click());
+  // Attach input to the button so it lives in the DOM for the picker.
+  btn.appendChild(input);
+  return btn;
 }
 
 function flashLabel(btn, text) {
