@@ -5,6 +5,9 @@ import { computeEffects } from './effects.js';
 import { detectSmells, indexSmellsByFile } from './smells.js';
 import { annotateFile } from './source-annotate.js';
 import { buildFlow } from './flow.js';
+import {
+  dismissKey, repoIdentity, loadDismissed, saveDismissed,
+} from './triage.js';
 
 const EMPTY_ANALYSIS = {
   edges: [], degree: new Map(), libToPaths: new Map(),
@@ -68,6 +71,8 @@ export const STATE = {
   smellsByFile: new Map(),
   smellsKindFilter: new Set(),
   smellsFileFilter: null,
+  dismissedSmells: new Set(),     // Set<dismissKey> for the current repo
+  showDismissed: false,           // transient toggle for the smells overlay
   paint: { kind: null, startKey: null, endKey: null, direction: 'forward' },
   fileTraceRoot: null,
   fileTraceHistory: [],
@@ -110,6 +115,8 @@ export function setFiles(files, analysis = EMPTY_ANALYSIS) {
   STATE.smellsByFile = indexSmellsByFile(STATE.smells);
   STATE.smellsKindFilter = new Set();
   STATE.smellsFileFilter = null;
+  STATE.dismissedSmells = loadDismissed(repoIdentity(STATE));
+  STATE.showDismissed = false;
   STATE.history = [];
   STATE.readme = null;
   STATE.docs = [];
@@ -356,6 +363,37 @@ export function toggleSmellKindFilter(kind) {
 export function setSmellsFileFilter(path) { STATE.smellsFileFilter = path || null; }
 export function clearSmellsFileFilter() { STATE.smellsFileFilter = null; }
 
+export function dismissSmell(smell) {
+  if (!smell) return;
+  const key = dismissKey(smell);
+  STATE.dismissedSmells.add(key);
+  saveDismissed(repoIdentity(STATE), STATE.dismissedSmells);
+}
+
+export function restoreSmell(smell) {
+  if (!smell) return;
+  const key = dismissKey(smell);
+  STATE.dismissedSmells.delete(key);
+  saveDismissed(repoIdentity(STATE), STATE.dismissedSmells);
+}
+
+export function setShowDismissed(v) { STATE.showDismissed = !!v; }
+
+export function isDismissed(smell) {
+  if (!smell) return false;
+  return STATE.dismissedSmells.has(dismissKey(smell));
+}
+
+export function importDismissed(set) {
+  if (!(set instanceof Set)) return 0;
+  let added = 0;
+  for (const k of set) {
+    if (!STATE.dismissedSmells.has(k)) { STATE.dismissedSmells.add(k); added++; }
+  }
+  saveDismissed(repoIdentity(STATE), STATE.dismissedSmells);
+  return added;
+}
+
 export function setPaintEndpoint(role, kind, key) {
   // role: 'start' | 'end'.  kind: 'fn' | 'file'.
   const p = STATE.paint;
@@ -434,6 +472,8 @@ export function resetAll() {
   STATE.fnEffectFilter = new Set();
   STATE.smellsKindFilter = new Set();
   STATE.smellsFileFilter = null;
+  STATE.dismissedSmells = new Set();
+  STATE.showDismissed = false;
 }
 export function setPendingHashParts(parts) { STATE.pendingHashParts = parts && Object.keys(parts).length ? parts : null; }
 export function setSelectedLineageBranch(name) { STATE.selectedLineageBranch = name || null; }
