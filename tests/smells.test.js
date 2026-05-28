@@ -307,6 +307,26 @@ test('smells: Python renamed from-import NOT flagged', () => {
     `bar is the local alias; got ${JSON.stringify(out.filter(h => h.kind === 'unresolved-call'))}`);
 });
 
+test('smells: Python exit/quit builtins NOT flagged', () => {
+  const state = buildState([{
+    name: 'a.py', path: 'a.py',
+    src: `import sys\ndef main():\n    if bad:\n        exit(0)\n    quit()\n`,
+  }]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'unresolved-call' && (h.subkind === 'exit' || h.subkind === 'quit')),
+    `exit/quit are builtins; got ${JSON.stringify(out.filter(h => h.kind === 'unresolved-call'))}`);
+});
+
+test('smells: Python dunder calls NOT flagged', () => {
+  const state = buildState([{
+    name: 'a.py', path: 'a.py',
+    src: `class Foo(Bar):\n    def setup(self):\n        __init__()\n        __post_init__()\n`,
+  }]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'unresolved-call' && /^__\w+__$/.test(h.subkind)),
+    `dunder methods are part of the object protocol; got ${JSON.stringify(out.filter(h => h.kind === 'unresolved-call'))}`);
+});
+
 test('smells: deterministic & sorted', () => {
   const state = buildState([{
     name: 'b.js', path: 'b.js',

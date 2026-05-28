@@ -183,6 +183,10 @@ export const BUILTINS = {
     'setattr', 'delattr', 'callable', 'iter', 'next', 'open', 'input', 'repr',
     'hash', 'id', 'vars', 'dir', 'globals', 'locals', 'super', 'object',
     'staticmethod', 'classmethod', 'property', 'format', 'any', 'all',
+    // interpreter / system builtins
+    'exit', 'quit', 'breakpoint', 'help', 'compile', 'eval', 'exec',
+    '__import__', 'ascii', 'bin', 'hex', 'oct', 'ord', 'chr', 'complex',
+    'memoryview', 'slice', 'aiter', 'anext',
     'append', 'extend', 'insert', 'remove', 'pop', 'clear', 'copy', 'update',
     'keys', 'values', 'items', 'get', 'setdefault', 'join', 'split', 'strip',
     'lower', 'upper', 'startswith', 'endswith', 'replace', 'find', 'index',

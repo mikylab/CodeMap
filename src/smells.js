@@ -239,6 +239,10 @@ function detectUnresolvedCalls(file, family, importBindingsByFile, sameFileNames
       .filter(Boolean);
     const fnScope = new Set([...fnParamNames, ...(fn.locals || [])]);
     for (const callName of (fn.calls || [])) {
+      // Dunder methods (`__init__`, `__new__`, `__post_init__`, …) are part of
+      // the Python object protocol — always provided by the runtime, never an
+      // unresolved import. Skip them so bare dunder calls aren't false alarms.
+      if (family === 'py' && /^__\w+__$/.test(callName)) continue;
       if (builtins.has(callName)) continue;
       if (imports.has(callName)) continue;
       if (localNames.has(callName)) continue;
