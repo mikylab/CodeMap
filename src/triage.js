@@ -83,3 +83,32 @@ export function saveDismissed(repoId, set) {
 export function clearStoredTriage(repoId) {
   safeRemove(storageKey(repoId));
 }
+
+export function triageExportPayload(repoId, set) {
+  return {
+    version: STORAGE_VERSION,
+    repoId: repoId || null,
+    dismissed: [...set].sort(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function parseTriageImport(text) {
+  let parsed;
+  try { parsed = JSON.parse(text); }
+  catch (e) { return { ok: false, error: 'invalid JSON' }; }
+  if (!parsed || typeof parsed !== 'object') {
+    return { ok: false, error: 'not an object' };
+  }
+  if (parsed.version !== STORAGE_VERSION) {
+    return { ok: false, error: `unsupported version: ${parsed.version}` };
+  }
+  if (!Array.isArray(parsed.dismissed)) {
+    return { ok: false, error: 'missing dismissed array' };
+  }
+  return {
+    ok: true,
+    repoId: parsed.repoId || null,
+    dismissed: new Set(parsed.dismissed.filter(x => typeof x === 'string')),
+  };
+}

@@ -1,4 +1,4 @@
-import { test, assertEqual, assertTrue, assertFalse } from './runner.js';
+import { test, assertEqual, assertDeepEqual, assertTrue, assertFalse } from './runner.js';
 import { dismissKey, repoIdentity, loadDismissed, saveDismissed, clearStoredTriage } from '../src/triage.js';
 
 test('triage: dismissKey is stable when only line changes', () => {
@@ -96,4 +96,43 @@ test('triage: saveDismissed with null repoId is a no-op', () => {
   // Must not throw.
   saveDismissed(null, new Set(['x']));
   assertEqual(loadDismissed(null).size, 0);
+});
+
+import { triageExportPayload, parseTriageImport } from '../src/triage.js';
+
+test('triage: export payload has expected shape', () => {
+  const set = new Set(['k1', 'k2']);
+  const payload = triageExportPayload('git:github.com/foo/bar@main', set);
+  assertEqual(payload.version, 1);
+  assertEqual(payload.repoId, 'git:github.com/foo/bar@main');
+  assertDeepEqual(payload.dismissed, ['k1', 'k2']);
+  assertTrue(typeof payload.updatedAt === 'string');
+});
+
+test('triage: parseTriageImport accepts a valid payload', () => {
+  const text = JSON.stringify({
+    version: 1, repoId: 'git:host/o/r@main', dismissed: ['a', 'b'], updatedAt: 't',
+  });
+  const result = parseTriageImport(text);
+  assertTrue(result.ok);
+  assertEqual(result.repoId, 'git:host/o/r@main');
+  assertDeepEqual([...result.dismissed].sort(), ['a', 'b']);
+});
+
+test('triage: parseTriageImport rejects malformed JSON', () => {
+  const result = parseTriageImport('{not json');
+  assertFalse(result.ok);
+  assertTrue(typeof result.error === 'string');
+});
+
+test('triage: parseTriageImport rejects missing dismissed array', () => {
+  const result = parseTriageImport(JSON.stringify({ version: 1 }));
+  assertFalse(result.ok);
+});
+
+test('triage: parseTriageImport rejects wrong version', () => {
+  const result = parseTriageImport(JSON.stringify({
+    version: 999, dismissed: ['a'],
+  }));
+  assertFalse(result.ok);
 });
