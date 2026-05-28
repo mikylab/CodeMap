@@ -80,6 +80,7 @@ export const STATE = {
   // workspace UI
   selectedFnKey: null,            // when set, detail pane is in fn mode
   detailMode: 'summary',          // sticky: summary | source | calls | risk | deps
+  sourceScrollLine: null,         // transient: line to scroll Source view to, then cleared
   fullscreen: null,               // null | 'walk' | 'graph' | 'smells' | 'lineage'
   navSearch: '',                  // search box in navigator
   helpOpen: false,                // glossary panel
@@ -415,6 +416,7 @@ export function setSidebarFilter(s) { STATE.sidebarFilter = s; }
 
 // workspace mutators
 export function setDetailMode(m) { STATE.detailMode = m; }
+export function setSourceScrollLine(n) { STATE.sourceScrollLine = (typeof n === 'number') ? n : null; }
 export function setFullscreen(name) { STATE.fullscreen = name || null; }
 export function exitFullscreen() { STATE.fullscreen = null; }
 export function setNavSearch(s) { STATE.navSearch = s || ''; }

@@ -1,6 +1,6 @@
 import {
   STATE, toggleSmellKindFilter, clearSmellsFileFilter, selectFile,
-  exitFullscreen, pushHistory, captureSnapshot,
+  exitFullscreen, pushHistory, captureSnapshot, setDetailMode, setSourceScrollLine,
   dismissSmell, restoreSmell, isDismissed, setShowDismissed,
 } from '../state.js';
 import { el } from '../dom.js';
@@ -25,7 +25,7 @@ export function renderSmells(onChange) {
   }
   wrap.appendChild(el('div', { cls: 'view-hint' }, [
     el('span', { cls: 'view-hint-name', text: 'Smells' }),
-    el('span', { text: ' — Heuristic findings for code that may not behave as it claims. Filter by kind. Click a finding to open the file.' }),
+    el('span', { text: ' — Heuristic findings for code that may not behave as it claims. Filter by kind. Click a finding’s location to jump to its source.' }),
   ]));
   wrap.appendChild(chips(onChange));
   if (STATE.smellsFileFilter) wrap.appendChild(fileChip(onChange));
@@ -115,8 +115,16 @@ function item(f, onChange) {
   head.appendChild(el('span', { cls: 'smell-loc', text: `${f.file}:${f.line}` }));
   head.appendChild(el('span', { cls: 'smell-kind', text: `${f.kind}${f.subkind ? ' · ' + f.subkind : ''}` }));
   head.appendChild(el('button', {
-    cls: 'smell-open', type: 'button', text: 'open file',
-    on: { click: e => { e.preventDefault(); e.stopPropagation(); pushHistory(captureSnapshot()); selectFile(f.file); exitFullscreen(); onChange(); } },
+    cls: 'smell-open', type: 'button', text: 'open source',
+    on: { click: e => {
+      e.preventDefault(); e.stopPropagation();
+      pushHistory(captureSnapshot());
+      selectFile(f.file);
+      setDetailMode('source');
+      setSourceScrollLine(f.line);
+      exitFullscreen();
+      onChange();
+    } },
   }));
   head.appendChild(el('button', {
     cls: 'smell-dismiss', type: 'button',
