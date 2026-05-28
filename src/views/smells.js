@@ -1,4 +1,8 @@
-import { STATE, toggleSmellKindFilter, clearSmellsFileFilter, selectFile, exitFullscreen, pushHistory, captureSnapshot } from '../state.js';
+import {
+  STATE, toggleSmellKindFilter, clearSmellsFileFilter, selectFile,
+  exitFullscreen, pushHistory, captureSnapshot,
+  dismissSmell, restoreSmell, isDismissed, setShowDismissed,
+} from '../state.js';
 import { el } from '../dom.js';
 import { smellExportBar } from '../smells-export.js';
 
@@ -40,14 +44,18 @@ function currentFiltered() {
   let items = STATE.smells;
   if (STATE.smellsKindFilter.size) items = items.filter(f => STATE.smellsKindFilter.has(f.kind));
   if (STATE.smellsFileFilter) items = items.filter(f => f.file === STATE.smellsFileFilter);
+  if (!STATE.showDismissed) items = items.filter(f => !isDismissed(f));
   return items;
 }
 
 function chips(onChange) {
   const counts = countByKind(STATE.smells);
   const total = STATE.smells.length;
+  const dismissedTotal = STATE.smells.filter(f => isDismissed(f)).length;
+  const visible = total - dismissedTotal;
   const wrap = el('div', { cls: 'fn-fx-chips' });
-  wrap.appendChild(el('span', { cls: 'fn-tb-count', text: `${total} finding${total === 1 ? '' : 's'}` }));
+  wrap.appendChild(el('span', { cls: 'fn-tb-count',
+    text: `${visible} finding${visible === 1 ? '' : 's'}${dismissedTotal ? ` · ${dismissedTotal} dismissed` : ''}` }));
   for (const k of KINDS) {
     const on = STATE.smellsKindFilter.has(k.id);
     wrap.appendChild(el('button', {
@@ -55,6 +63,15 @@ function chips(onChange) {
       type: 'button',
       text: `${k.label} ${counts.get(k.id) || 0}`,
       on: { click: () => { toggleSmellKindFilter(k.id); onChange(); } },
+    }));
+  }
+  if (dismissedTotal > 0) {
+    const on = STATE.showDismissed;
+    wrap.appendChild(el('button', {
+      cls: `fn-fx-chip${on ? ' on' : ''}`,
+      type: 'button',
+      text: on ? 'hide dismissed' : 'show dismissed',
+      on: { click: () => { setShowDismissed(!on); onChange(); } },
     }));
   }
   return wrap;
@@ -80,9 +97,7 @@ function countByKind(findings) {
 
 function list(onChange) {
   const wrap = el('div', { cls: 'smells-list' });
-  let items = STATE.smells;
-  if (STATE.smellsKindFilter.size) items = items.filter(f => STATE.smellsKindFilter.has(f.kind));
-  if (STATE.smellsFileFilter) items = items.filter(f => f.file === STATE.smellsFileFilter);
+  const items = currentFiltered();
   if (!items.length) {
     wrap.appendChild(el('div', { cls: 'sb-empty', text: 'No smells match the current filters.' }));
     return wrap;
@@ -92,7 +107,8 @@ function list(onChange) {
 }
 
 function item(f, onChange) {
-  const row = el('details', { cls: `smell-item smell-${f.severity}` });
+  const dismissed = isDismissed(f);
+  const row = el('details', { cls: `smell-item smell-${f.severity}${dismissed ? ' smell-dismissed' : ''}` });
   const head = el('summary', { cls: 'smell-head' });
   head.appendChild(el('span', { cls: 'smell-caret', text: '▸' }));
   head.appendChild(el('span', { cls: `smell-sev sev-${f.severity}`, text: f.severity === 'warn' ? '⚠' : 'ℹ' }));
@@ -101,6 +117,16 @@ function item(f, onChange) {
   head.appendChild(el('button', {
     cls: 'smell-open', type: 'button', text: 'open file',
     on: { click: e => { e.preventDefault(); e.stopPropagation(); pushHistory(captureSnapshot()); selectFile(f.file); exitFullscreen(); onChange(); } },
+  }));
+  head.appendChild(el('button', {
+    cls: 'smell-dismiss', type: 'button',
+    text: dismissed ? '↶ restore' : '✕ dismiss',
+    title: dismissed ? 'Restore this finding' : 'Hide this finding (persisted)',
+    on: { click: e => {
+      e.preventDefault(); e.stopPropagation();
+      if (dismissed) restoreSmell(f); else dismissSmell(f);
+      onChange();
+    } },
   }));
   row.appendChild(head);
   if (f.snippet) row.appendChild(el('div', { cls: 'smell-snippet', text: f.snippet }));
