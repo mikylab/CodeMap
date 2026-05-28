@@ -30,3 +30,56 @@ export function repoIdentity(state) {
   const sorted = files.map(f => f.path).sort();
   return `local:${rootName}:${djb2(sorted.join('\n'))}`;
 }
+
+const STORAGE_PREFIX = 'codemap:triage:';
+const STORAGE_VERSION = 1;
+
+function storageKey(repoId) {
+  return repoId ? `${STORAGE_PREFIX}${repoId}` : null;
+}
+
+function safeGet(key) {
+  if (!key) return null;
+  try { return localStorage.getItem(key); }
+  catch { return null; }
+}
+
+function safeSet(key, value) {
+  if (!key) return false;
+  try { localStorage.setItem(key, value); return true; }
+  catch (e) {
+    console.warn('codemap: localStorage write failed', e);
+    return false;
+  }
+}
+
+function safeRemove(key) {
+  if (!key) return;
+  try { localStorage.removeItem(key); } catch {}
+}
+
+export function loadDismissed(repoId) {
+  const raw = safeGet(storageKey(repoId));
+  if (!raw) return new Set();
+  let parsed;
+  try { parsed = JSON.parse(raw); }
+  catch { return new Set(); }
+  if (!parsed || !Array.isArray(parsed.dismissed)) return new Set();
+  return new Set(parsed.dismissed.filter(x => typeof x === 'string'));
+}
+
+export function saveDismissed(repoId, set) {
+  const key = storageKey(repoId);
+  if (!key) return;
+  const payload = {
+    version: STORAGE_VERSION,
+    repoId,
+    dismissed: [...set].sort(),
+    updatedAt: new Date().toISOString(),
+  };
+  safeSet(key, JSON.stringify(payload));
+}
+
+export function clearStoredTriage(repoId) {
+  safeRemove(storageKey(repoId));
+}
