@@ -1143,6 +1143,14 @@ button, input, select { font: inherit; color: inherit; }
   padding: 3px 8px; border: 1px solid currentColor; border-radius: 3px;
   background: transparent; cursor: pointer; color: var(--accent);
 }
+.smell-dismiss {
+  font: 11px var(--font-mono);
+  padding: 3px 8px; border: 1px solid var(--muted); border-radius: 3px;
+  background: transparent; cursor: pointer; color: var(--muted);
+}
+.smell-dismiss:hover { color: var(--fg, #e6edf3); border-color: var(--fg, #e6edf3); }
+.smell-item.smell-dismissed { opacity: 0.45; }
+.smell-item.smell-dismissed:hover { opacity: 0.75; }
 
 /* --- Phase 9c: paint chip strip --------------------------------------- */
 .paint-strip {

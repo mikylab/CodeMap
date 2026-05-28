@@ -1,7 +1,7 @@
 import {
   STATE, setDetailMode, selectFile, selectFn, clearSelection,
   pushHistory, captureSnapshot, goBack, getSourceAnnotation,
-  toggleTraceBranch,
+  toggleTraceBranch, setSourceScrollLine,
 } from '../state.js';
 import { cxBucket, isStdlib } from '../tabs.js';
 import { fnKey, buildTraceTree } from '../trace-graph.js';
@@ -302,7 +302,7 @@ function riskRepo(onChange) {
   }
   const head = el('div', { cls: 'view-hint' }, [
     el('span', { cls: 'view-hint-name', text: 'Risk' }),
-    el('span', { text: ` — ${all.length} finding${all.length === 1 ? '' : 's'} across the repo. Click to open the file.` }),
+    el('span', { text: ` — ${all.length} finding${all.length === 1 ? '' : 's'} across the repo. Click a location to jump to its source.` }),
   ]);
   wrap.appendChild(head);
   wrap.appendChild(smellExportBar(all, 'all-smells'));
@@ -710,8 +710,15 @@ function smellRow(s, onChange) {
     el('button', {
       cls: 'ws-smell-loc', type: 'button',
       text: `${basename(s.file)}:${s.line}`,
-      title: `${s.file}:${s.line} — open file`,
-      on: { click: e => { e.preventDefault(); e.stopPropagation(); pushHistory(captureSnapshot()); selectFile(s.file); onChange(); } },
+      title: `${s.file}:${s.line} — open source`,
+      on: { click: e => {
+        e.preventDefault(); e.stopPropagation();
+        pushHistory(captureSnapshot());
+        selectFile(s.file);
+        setDetailMode('source');
+        setSourceScrollLine(s.line);
+        onChange();
+      } },
     }),
     el('span', { cls: 'ws-smell-kind', text: s.subkind ? `${s.kind}/${s.subkind}` : s.kind }),
   ]));
@@ -745,6 +752,9 @@ function sourceBlock(lines, startLine, opts = {}) {
       renderAnnotatedLine(code, lines[i], annots);
     }
     row.appendChild(code);
+    // Mark the row the renderer should scroll into view (consumed in
+    // renderWorkspaceShell, after this tree is attached to the document).
+    if (lineNum === STATE.sourceScrollLine) row.dataset.scrollTarget = '1';
     pre.appendChild(row);
   }
   attachSourcePopover(pre);

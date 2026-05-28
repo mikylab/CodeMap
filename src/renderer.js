@@ -32,6 +32,14 @@ function renderWorkspaceShell() {
     const body = root.querySelector('.ws-body');
     if (body) body.scrollTop = target;
   }
+  // Jump-to-source: scroll the tagged finding line into view. Done here, right
+  // after the tree is attached, so layout is available and no later re-render
+  // can detach the row before we scroll it.
+  if (STATE.sourceScrollLine != null) {
+    STATE.sourceScrollLine = null;
+    const target = root.querySelector('[data-scroll-target]');
+    if (target) target.scrollIntoView({ block: 'center' });
+  }
 }
 
 document.addEventListener('codemap:rerender', renderAll);
