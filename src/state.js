@@ -59,6 +59,7 @@ export const STATE = {
   collapsedGraphDirs: new Set(),
   graphView: null,
   graphSize: null,
+  graphFocusDir: null,             // dir just expanded — frame + highlight its files, then consumed
   graphFilter: '',
   graphHideIsolated: true,
   fileImports: new Map(),
@@ -213,13 +214,19 @@ export function resetTraceBranches() {
 }
 
 export function toggleGraphDir(dir) {
-  if (STATE.collapsedGraphDirs.has(dir)) STATE.collapsedGraphDirs.delete(dir);
+  const expanding = STATE.collapsedGraphDirs.has(dir);
+  if (expanding) STATE.collapsedGraphDirs.delete(dir);
   else STATE.collapsedGraphDirs.add(dir);
+  // Reframe on the next render: when expanding, frame + highlight the files we
+  // just revealed so it's obvious what opened and where; when collapsing, fall
+  // back to a full fit. graphFocusDir is consumed by the view after one render.
+  STATE.graphFocusDir = expanding ? dir : null;
   STATE.graphView = null;
 }
 
 export function resetGraphCollapse() {
   STATE.collapsedGraphDirs = defaultCollapsedGraphDirs(STATE.files);
+  STATE.graphFocusDir = null;
   STATE.graphView = null;
 }
 
@@ -241,6 +248,7 @@ export function toggleGraphHideIsolated() { STATE.graphHideIsolated = !STATE.gra
 export function clearGraphFocus() {
   STATE.fileTraceRoot = null;
   STATE.selectedPath = null;
+  STATE.graphFocusDir = null;
 }
 
 export function setFileTraceRoot(path) {

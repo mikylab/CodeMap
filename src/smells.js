@@ -8,7 +8,8 @@
 //
 // Detectors (all language-agnostic regex-based — no AST):
 //   1. unresolved-call    — call site whose name is not in builtins/imports/local defs
-//   2. broken-import      — relative import that resolves to no file
+//   2. broken-import      — relative import (warn) or root-absolute URL path
+//                           (info) that resolves to no file
 //   3. suspicious-comment — TODO/FIXME/HACK/etc inside a comment
 //   4. empty-catch        — swallowed catch blocks (JS/TS, Python, Go)
 //   5. placeholder        — magic strings (localhost, YOUR_API_KEY, …) and ports
@@ -290,19 +291,26 @@ function detectBrokenImports(file, byPath, out) {
   for (const spec of (file.localImports || [])) {
     if (!(spec.startsWith('.') || spec.startsWith('/'))) continue;
     if (resolveSpec(file.path, spec, byPath)) continue;
+    // A leading-slash spec is a root-absolute URL path (e.g. /static/app.css),
+    // not a file-relative import. We resolve it against the repo root, but a
+    // framework static mount may remap the prefix (mount("/assets", "dist/")),
+    // so we can't model every case — surface it as info, not a warning.
+    const absolute = spec.startsWith('/');
     const idx = file.src.indexOf(spec);
     const line = idx >= 0 ? lineFor(file.src, idx) : 1;
     const snippet = idx >= 0 ? snippetAt(file.src, idx) : spec;
     out.push({
       id: makeId(file.path, line, 'broken-import', snippet),
       kind: 'broken-import',
-      subkind: 'relative',
-      severity: 'warn',
+      subkind: absolute ? 'absolute' : 'relative',
+      severity: absolute ? 'info' : 'warn',
       file: file.path,
       line,
       fnName: null,
       snippet,
-      why: `relative import "${spec}" does not resolve to a known file`,
+      why: absolute
+        ? `root-absolute path "${spec}" does not resolve under the repo root (a static mount may remap it)`
+        : `relative import "${spec}" does not resolve to a known file`,
     });
   }
 }
@@ -310,9 +318,17 @@ function detectBrokenImports(file, byPath, out) {
 const RESOLVE_EXTS = ['js', 'jsx', 'ts', 'tsx', 'py', 'rb', 'go', 'rs', 'java'];
 
 function resolveSpec(importerPath, spec, byPath) {
-  const dir = importerPath.includes('/') ? importerPath.slice(0, importerPath.lastIndexOf('/')) : '';
   spec = normalizeRelSpec(spec);
-  const joined = normPath(dir ? dir + '/' + spec : spec);
+  // Root-absolute URL paths (/static/app.css) are rooted at the web/repo root,
+  // never at the importing file's directory. Strip the leading slash and
+  // resolve against the repo root. Relative specs join against the importer dir.
+  let joined;
+  if (spec.startsWith('/')) {
+    joined = normPath(spec);
+  } else {
+    const dir = importerPath.includes('/') ? importerPath.slice(0, importerPath.lastIndexOf('/')) : '';
+    joined = normPath(dir ? dir + '/' + spec : spec);
+  }
   if (byPath.has(joined)) return joined;
   for (const ext of RESOLVE_EXTS) if (byPath.has(`${joined}.${ext}`)) return `${joined}.${ext}`;
   for (const ext of RESOLVE_EXTS) if (byPath.has(`${joined}/index.${ext}`)) return `${joined}/index.${ext}`;

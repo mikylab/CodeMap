@@ -6,6 +6,13 @@ import { renderSmells } from './smells.js';
 import { renderLineageOverlay } from '../lineage-render.js';
 import { renderDocsPicker } from './docs-picker.js';
 
+// Browser fullscreen can be entered/exited by means we don't control (Esc, the
+// OS, the async resolution of requestFullscreen). Re-render on every change so
+// the toggle label and the `:fullscreen` layout always reflect the real state.
+document.addEventListener('fullscreenchange', () => {
+  document.dispatchEvent(new CustomEvent('codemap:rerender'));
+});
+
 export function renderFullscreen(onChange) {
   const root = document.getElementById('fullscreen');
   clear(root);
@@ -34,11 +41,32 @@ function header(onChange) {
     el('span', { cls: 'fs-title-text', text: labels[STATE.fullscreen] }),
     el('span', { cls: 'fs-title-sub', text: subs[STATE.fullscreen] }),
   ]));
+  // True browser fullscreen — promotes the overlay edge-to-edge and hides the
+  // toolbar/chrome behind it. Placed in the header (next to Close) because
+  // that's the conventional, discoverable spot for an expand control.
+  head.appendChild(el('button', {
+    cls: 'fs-fullscreen-btn', type: 'button',
+    text: document.fullscreenElement ? '⤡  Exit full screen' : '⛶  Full screen',
+    title: 'Expand edge-to-edge, hiding everything else (Esc to exit)',
+    on: { click: () => { toggleBrowserFullscreen(); onChange(); } },
+  }));
   head.appendChild(el('button', {
     cls: 'fs-close', type: 'button', text: '← back to workspace (Esc)',
     on: { click: () => { exitFullscreen(); onChange(); } },
   }));
   return head;
+}
+
+// Toggle true browser fullscreen on the persistent overlay root. We target
+// `#fullscreen` (not an inner view element) because it survives the overlay's
+// re-renders, so interacting with the view won't drop you out of fullscreen.
+function toggleBrowserFullscreen() {
+  if (document.fullscreenElement) {
+    document.exitFullscreen?.();
+    return;
+  }
+  const root = document.getElementById('fullscreen');
+  root?.requestFullscreen?.().catch(() => {});
 }
 
 function viewFor(name, onChange) {

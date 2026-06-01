@@ -4,6 +4,17 @@ import { renderPaintStrip, computePaint } from './paint-strip.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+// Folders are containers, not language artifacts — paint every collapsed folder
+// box one neutral violet so it reads as a folder regardless of the dominant
+// language inside, and never blends in with blue-tinted source files (which keep
+// their per-language colors).
+const DIR_COLOR = '#8b7fd1';
+// A single bright highlight reserved for the selected/focused node — distinct
+// from every language hue and from the folder violet, so the current selection
+// is unmistakable in a crowded map.
+const SELECT_FILL = '#ffb02e';
+const SELECT_STROKE = '#c77d00';
+
 export function renderGraphView(onChange) {
   if (!STATE.files.length) return splash();
 
@@ -38,6 +49,8 @@ function legend(onChange) {
   wrap.appendChild(el('span', { cls: 'graph-legend-sep', text: '·' }));
   wrap.appendChild(legendSwatch('var(--accent)', 'imports →'));
   wrap.appendChild(legendSwatch('var(--success)', 'imported by ←'));
+  wrap.appendChild(legendSwatch(DIR_COLOR, 'folder'));
+  wrap.appendChild(legendSwatch(SELECT_FILL, 'selected'));
 
   const search = el('input', {
     cls: 'graph-search',
@@ -82,6 +95,8 @@ function legend(onChange) {
     title: 'Reset zoom and recenter',
     on: { click: () => { resetGraphView(); onChange(); } },
   }));
+  // The true-fullscreen toggle lives in the overlay header (the conventional,
+  // discoverable spot) — see views/fullscreen.js.
   wrap.appendChild(zoom);
   return wrap;
 }
@@ -208,29 +223,58 @@ function graphCanvas(focusPath, onChange) {
   for (const b of buckets) if (b) b.sort();
   if (isolatedIds.length && !STATE.graphHideIsolated) buckets.push(isolatedIds.sort());
 
-  const numLayers = buckets.length || 1;
-  const widest = buckets.reduce((m, b) => Math.max(m, b ? b.length : 0), 1);
-  const W = Math.max(1100, widest * 200);
-  const H = Math.max(560, numLayers * 170);
+  // Wrap wide layers into balanced sub-rows so a fat layer becomes a compact
+  // block instead of an endless horizontal strip. This keeps the whole map near
+  // the viewport's aspect ratio, so big repos need far less panning to read.
+  const realLayers = buckets.filter(Boolean);
+  const totalNodes = realLayers.reduce((n, b) => n + b.length, 0);
+  const ROW_H = 92, LAYER_GAP = 56, COL_GAP = 34;
   const padX = 90, padY = 80;
-  const innerW = W - padX * 2;
-  const innerH = H - padY * 2;
+  // Column budget grows with √(node count) so the graph stays roughly landscape;
+  // capped so very wide layers wrap rather than sprawl off-screen.
+  const colBudget = Math.max(6, Math.min(26, Math.round(Math.sqrt(totalNodes || 1) * 1.7)));
+
+  const radiusFor = (node) => node.kind === 'dir'
+    ? 16 + Math.sqrt(node.lineCount / 25)
+    : 6 + Math.sqrt((node.lineCount || 0) / 18);
+
+  // Split each layer into sub-rows, then pack nodes within a row by their
+  // *measured* width (a folder box is as wide as its longest label, a file is
+  // its label or dot). Fixed-pitch columns collided whenever a box was wider
+  // than the pitch; measured packing guarantees a real gap between every box.
+  const rows = []; // { y, rowW, items: [{ id, node, r, w }] }
+  let cursorY = padY, maxRowW = 0, maxY = padY;
+  for (const bucket of realLayers) {
+    const cols = Math.min(colBudget, bucket.length);
+    const subRows = Math.ceil(bucket.length / cols);
+    for (let sr = 0; sr < subRows; sr++) {
+      const slice = bucket.slice(sr * cols, sr * cols + cols);
+      const items = slice.map(id => {
+        const node = nodes.get(id);
+        const r = radiusFor(node);
+        return { id, node, r, w: nodeLayoutWidth(node, r, nodes.size) };
+      });
+      const rowW = items.reduce((s, it) => s + it.w, 0) + COL_GAP * Math.max(0, items.length - 1);
+      const y = cursorY + sr * ROW_H + ROW_H / 2;
+      maxRowW = Math.max(maxRowW, rowW);
+      maxY = Math.max(maxY, y);
+      rows.push({ y, rowW, items });
+    }
+    cursorY += subRows * ROW_H + LAYER_GAP;
+  }
+
+  const W = Math.max(900, padX * 2 + maxRowW);
+  const H = Math.max(520, maxY + ROW_H / 2 + padY);
+  const centerX = W / 2;
 
   const positions = new Map();
-  buckets.forEach((bucket, L) => {
-    if (!bucket) return;
-    const rowY = numLayers === 1 ? H / 2 : padY + (L / (numLayers - 1)) * innerH;
-    bucket.forEach((id, i) => {
-      const colX = bucket.length === 1
-        ? W / 2
-        : padX + (i / (bucket.length - 1)) * innerW;
-      const node = nodes.get(id);
-      const r = node.kind === 'dir'
-        ? 16 + Math.sqrt(node.lineCount / 25)
-        : 6 + Math.sqrt((node.lineCount || 0) / 18);
-      positions.set(id, { x: colX, y: rowY, r, node, col: i });
+  for (const row of rows) {
+    let x = centerX - row.rowW / 2;
+    row.items.forEach((it, colIdx) => {
+      positions.set(it.id, { x: x + it.w / 2, y: row.y, r: it.r, node: it.node, col: colIdx, w: it.w });
+      x += it.w + COL_GAP;
     });
-  });
+  }
 
   const focusId = focusPath ? clusterIdFor(focusPath) : null;
   const focusOut = focusId ? (outgoing.get(focusId) || new Set()) : null;
@@ -252,9 +296,31 @@ function graphCanvas(focusPath, onChange) {
 
   STATE.graphSize = { W, H };
 
+  // Files belonging to the folder the user just expanded — used to frame the
+  // camera on them and pulse them so it's clear what opened and where it sits.
+  const focusDir = STATE.graphFocusDir;
+  const isUnderFocusDir = (node) => {
+    if (!focusDir) return false;
+    if (node.kind === 'file') return node.file.path.startsWith(focusDir + '/');
+    return node.dir === focusDir || node.dir.startsWith(focusDir + '/');
+  };
+
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('class', 'graph-svg');
-  const initView = STATE.graphView || { x: 0, y: 0, w: W, h: H };
+  // Frame the content with a margin on first render (or after a structure
+  // change reset graphView to null) so the map opens centered and legible
+  // rather than as a microscopic dot-field inside the oversized canvas.
+  if (!STATE.graphView) {
+    const focusPositions = focusDir
+      ? [...positions.values()].filter(p => isUnderFocusDir(p.node))
+      : [];
+    // After an expand, frame just the revealed files (keeps you anchored to
+    // what you opened). Otherwise frame the whole map.
+    STATE.graphView = focusPositions.length
+      ? fitPositions(focusPositions, W, H, 1.6)
+      : fitView(positions, W, H);
+  }
+  const initView = STATE.graphView;
   svg.setAttribute('viewBox', `${initView.x} ${initView.y} ${initView.w} ${initView.h}`);
   svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
   svg.style.width = '100%';
@@ -307,19 +373,25 @@ function graphCanvas(focusPath, onChange) {
     const dimmed = focusDim || filterDim || paintDim;
     const isMatch = !!(matchedIds && matchedIds.has(id));
     const isFocus = id === focusId;
+    const justExpanded = isUnderFocusDir(node);
     const g = document.createElementNS(SVG_NS, 'g');
     g.setAttribute('transform', `translate(${pos.x},${pos.y})`);
-    g.setAttribute('class', `graph-node graph-node-${node.kind}${isFocus ? ' focus' : ''}${dimmed ? ' dim' : ''}${isMatch ? ' match' : ''}`);
+    g.setAttribute('class', `graph-node graph-node-${node.kind}${isFocus ? ' focus' : ''}${dimmed ? ' dim' : ''}${isMatch ? ' match' : ''}${justExpanded ? ' just-expanded' : ''}`);
     g.style.cursor = 'pointer';
 
     if (node.kind === 'dir') {
-      const w = Math.max(120, pos.r * 6), h = Math.max(48, pos.r * 2.6);
+      // Box width comes straight from the layout's measured footprint (pos.w),
+      // so the drawn box exactly fills its packed slot and never overlaps a
+      // neighbour. Both text lines are centered within it.
+      const titleText = `▸ ${node.dir}/`;
+      const subText = `${node.files.length} files · click to expand`;
+      const w = pos.w, h = Math.max(48, pos.r * 2.6);
       const rect = document.createElementNS(SVG_NS, 'rect');
       rect.setAttribute('x', String(-w / 2)); rect.setAttribute('y', String(-h / 2));
       rect.setAttribute('width', String(w)); rect.setAttribute('height', String(h));
       rect.setAttribute('rx', '8');
-      rect.setAttribute('fill', alpha(node.langColor || '#888', '33'));
-      rect.setAttribute('stroke', isFocus ? 'var(--accent)' : (node.langColor || '#888'));
+      rect.setAttribute('fill', isFocus ? alpha(SELECT_FILL, '40') : alpha(DIR_COLOR, '33'));
+      rect.setAttribute('stroke', isFocus ? SELECT_STROKE : DIR_COLOR);
       rect.setAttribute('stroke-width', isFocus ? '2.5' : '1.5');
       rect.setAttribute('stroke-dasharray', '4,3');
       g.appendChild(rect);
@@ -327,13 +399,13 @@ function graphCanvas(focusPath, onChange) {
       label.setAttribute('class', 'graph-node-label graph-dir-label');
       label.setAttribute('x', '0'); label.setAttribute('y', '-2');
       label.setAttribute('text-anchor', 'middle');
-      label.textContent = `▸ ${node.dir}/`;
+      label.textContent = titleText;
       g.appendChild(label);
       const sub = document.createElementNS(SVG_NS, 'text');
       sub.setAttribute('class', 'graph-node-sublabel');
       sub.setAttribute('x', '0'); sub.setAttribute('y', '14');
       sub.setAttribute('text-anchor', 'middle');
-      sub.textContent = `${node.files.length} files · click to expand`;
+      sub.textContent = subText;
       g.appendChild(sub);
       const title = document.createElementNS(SVG_NS, 'title');
       title.textContent = `${node.dir}/ (collapsed)\n${node.files.length} files · ${node.lineCount} lines\nimports ${outgoing.get(id).size} · imported by ${incoming.get(id).size}`;
@@ -343,11 +415,11 @@ function graphCanvas(focusPath, onChange) {
       const f = node.file;
       const circle = document.createElementNS(SVG_NS, 'circle');
       circle.setAttribute('r', String(pos.r));
-      circle.setAttribute('fill', f.langColor ? alpha(f.langColor, 'cc') : '#888');
-      circle.setAttribute('stroke', isFocus ? 'var(--accent)' : (f.langColor || '#888'));
-      circle.setAttribute('stroke-width', isFocus ? '2.5' : '1');
+      circle.setAttribute('fill', isFocus ? SELECT_FILL : (f.langColor ? alpha(f.langColor, 'cc') : '#888'));
+      circle.setAttribute('stroke', isFocus ? SELECT_STROKE : (f.langColor || '#888'));
+      circle.setAttribute('stroke-width', isFocus ? '3' : '1');
       g.appendChild(circle);
-      const showLabel = isFocus || isMatch || (focused && focused.has(id)) || pos.r > 8 || nodes.size <= 80;
+      const showLabel = isFocus || isMatch || justExpanded || (focused && focused.has(id)) || pos.r > 8 || nodes.size <= 80;
       if (showLabel) {
         const label = document.createElementNS(SVG_NS, 'text');
         label.setAttribute('class', `graph-node-label${isMatch ? ' match' : ''}`);
@@ -378,13 +450,133 @@ function graphCanvas(focusPath, onChange) {
   }
   svg.appendChild(ng);
 
-  attachPanZoom(svg, W, H);
+  const ctrl = attachPanZoom(svg, W, H);
 
   host.appendChild(svg);
+  if (nodes.size > 12) host.appendChild(buildMinimap(positions, W, H, ctrl, focusId));
+
+  // Consume the just-expanded marker: the framing + pulse fire on this render
+  // only, so the highlight settles instead of replaying on later re-renders.
+  STATE.graphFocusDir = null;
   return host;
 }
 
+// The on-screen footprint width of a node, used to pack rows without collisions.
+// Must stay in sync with the box/label drawing below: a folder box is as wide as
+// its longest text line; a file is its (truncated) label, or just its dot when
+// labels are hidden on large maps.
+function nodeLayoutWidth(node, r, nodeCount) {
+  if (node.kind === 'dir') {
+    const titleText = `▸ ${node.dir}/`;
+    const subText = `${node.files.length} files · click to expand`;
+    const textW = Math.max(titleText.length * 7.7, subText.length * 5.9) + 28;
+    return Math.max(120, r * 6, textW);
+  }
+  // Mirrors the render-time showLabel test for the common cases (small maps label
+  // everything; large files always carry a label). Transient focus/match labels
+  // are rare enough that minor crowding there is acceptable.
+  const labelLikely = nodeCount <= 80 || r > 8;
+  const labelW = labelLikely ? Math.min(basename(node.file.path).length, 22) * 6.2 : 0;
+  return Math.max(r * 2, labelW);
+}
+
+function fitView(positions, W, H) {
+  return fitPositions([...positions.values()], W, H);
+}
+
+// Frame an arbitrary set of node positions. `pad` scales the surrounding margin
+// relative to the content size — a value > 1 leaves breathing room so framed
+// content keeps some of its neighbourhood visible for orientation.
+function fitPositions(posList, W, H, pad = 1) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of posList) {
+    minX = Math.min(minX, p.x - p.r); maxX = Math.max(maxX, p.x + p.r);
+    minY = Math.min(minY, p.y - p.r); maxY = Math.max(maxY, p.y + p.r);
+  }
+  if (!isFinite(minX)) return { x: 0, y: 0, w: W, h: H };
+  const cw = maxX - minX, ch = maxY - minY;
+  const m = Math.max(80, Math.max(cw, ch) * 0.25 * (pad - 1) + 80);
+  return { x: minX - m, y: minY - m, w: cw + m * 2, h: ch + m * 2 };
+}
+
+// A live thumbnail of the whole graph with a draggable viewport rectangle —
+// the "you are here" anchor that keeps you oriented while zoomed into a big map.
+function buildMinimap(positions, W, H, ctrl, focusId) {
+  const MM_MAX = 190;
+  const aspect = W / H;
+  const mmW = aspect >= 1 ? MM_MAX : Math.round(MM_MAX * aspect);
+  const mmH = aspect >= 1 ? Math.round(MM_MAX / aspect) : MM_MAX;
+
+  const wrap = el('div', { cls: 'graph-minimap' });
+  wrap.style.width = mmW + 'px';
+  wrap.style.height = mmH + 'px';
+
+  const mm = document.createElementNS(SVG_NS, 'svg');
+  mm.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  // Element aspect matches the viewBox aspect, so there's no letterboxing and
+  // client→graph coordinate mapping below stays a simple linear scale.
+  mm.setAttribute('preserveAspectRatio', 'none');
+  mm.setAttribute('class', 'graph-minimap-svg');
+
+  let focusDot = null;
+  for (const [id, pos] of positions) {
+    const isFocus = id === focusId;
+    const dot = document.createElementNS(SVG_NS, 'circle');
+    dot.setAttribute('cx', String(pos.x));
+    dot.setAttribute('cy', String(pos.y));
+    // Inflate radius so even tiny file nodes register at thumbnail scale; the
+    // selected node gets a larger, fully-opaque bright dot so you can spot where
+    // it sits in the whole map at a glance.
+    dot.setAttribute('r', String(isFocus ? Math.max(13, pos.r * 1.6) : Math.max(7, pos.r)));
+    dot.setAttribute('fill', isFocus ? SELECT_FILL : (pos.node.kind === 'dir' ? DIR_COLOR : (pos.node.langColor || '#888')));
+    dot.setAttribute('opacity', isFocus ? '1' : '0.6');
+    if (isFocus) { focusDot = dot; continue; } // drawn last so nothing overlaps it
+    mm.appendChild(dot);
+  }
+  // Paint the selection on top of the dot field.
+  if (focusDot) mm.appendChild(focusDot);
+
+  const vp = document.createElementNS(SVG_NS, 'rect');
+  vp.setAttribute('class', 'graph-minimap-vp');
+  const drawVp = (v) => {
+    vp.setAttribute('x', String(v.x));
+    vp.setAttribute('y', String(v.y));
+    vp.setAttribute('width', String(Math.max(0, v.w)));
+    vp.setAttribute('height', String(Math.max(0, v.h)));
+  };
+  drawVp(ctrl.getView());
+  mm.appendChild(vp);
+  ctrl.onView = drawVp;
+
+  let dragging = false;
+  const recenter = (e) => {
+    const rect = mm.getBoundingClientRect();
+    const gx = (e.clientX - rect.left) / rect.width * W;
+    const gy = (e.clientY - rect.top) / rect.height * H;
+    const v = ctrl.getView();
+    ctrl.setView({ x: gx - v.w / 2, y: gy - v.h / 2, w: v.w, h: v.h });
+  };
+  mm.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    dragging = true;
+    mm.setPointerCapture(e.pointerId);
+    recenter(e);
+  });
+  mm.addEventListener('pointermove', (e) => { if (dragging) recenter(e); });
+  const end = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    try { mm.releasePointerCapture(e.pointerId); } catch (_) {}
+  };
+  mm.addEventListener('pointerup', end);
+  mm.addEventListener('pointercancel', end);
+
+  wrap.appendChild(mm);
+  return wrap;
+}
+
 function attachPanZoom(svg, W, H) {
+  const ctrl = { onView: null };
   const getView = () => {
     const v = svg.viewBox.baseVal;
     return { x: v.x, y: v.y, w: v.width, h: v.height };
@@ -392,7 +584,10 @@ function attachPanZoom(svg, W, H) {
   const setView = (v) => {
     svg.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`);
     STATE.graphView = v;
+    if (ctrl.onView) ctrl.onView(v);
   };
+  ctrl.getView = getView;
+  ctrl.setView = setView;
   const minW = W * 0.05, maxW = W * 6;
   const minH = H * 0.05, maxH = H * 6;
 
@@ -432,6 +627,8 @@ function attachPanZoom(svg, W, H) {
   };
   svg.addEventListener('pointerup', endDrag);
   svg.addEventListener('pointercancel', endDrag);
+
+  return ctrl;
 }
 
 function computeLayers(ids, outgoing, incoming) {

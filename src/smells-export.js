@@ -116,6 +116,40 @@ function triageImportBtn() {
   return btn;
 }
 
+export function smellCopyBtn(f) {
+  const btn = el('button', {
+    cls: 'smell-copy', type: 'button', text: '⧉ copy',
+    title: 'Copy this finding as markdown for an LLM',
+  });
+  btn.addEventListener('click', async e => {
+    e.preventDefault(); e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(buildSingleSmell(f));
+      flashLabel(btn, 'copied ✓');
+    } catch (_) {
+      flashLabel(btn, 'copy failed');
+    }
+  });
+  return btn;
+}
+
+export function buildSingleSmell(f) {
+  const lines = [];
+  lines.push(`${f.file}:${f.line} — ${f.kind}${f.subkind ? ` / ${f.subkind}` : ''}`);
+  lines.push(`- Severity: ${f.severity}`);
+  if (f.fnName) lines.push(`- Function: \`${f.fnName}()\``);
+  if (f.why) lines.push(`- Why flagged: ${f.why}`);
+  const desc = KIND_DESCRIPTIONS[f.kind];
+  if (desc) lines.push(`- What this heuristic means: ${desc}`);
+  if (f.snippet) {
+    lines.push('- Snippet:');
+    lines.push('```');
+    lines.push(f.snippet);
+    lines.push('```');
+  }
+  return lines.join('\n');
+}
+
 function flashLabel(btn, text) {
   const original = btn.textContent;
   btn.textContent = text;

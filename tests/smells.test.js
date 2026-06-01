@@ -197,6 +197,32 @@ test('smells: Python relative import that truly resolves to nothing IS flagged',
     `.nonexistent has no target and should be flagged`);
 });
 
+test('smells: root-absolute asset URL resolving to repo root NOT flagged', () => {
+  // <link href="/static/app.css"> is a URL path rooted at the web root, not the
+  // importing file's directory. It must resolve against the repo root.
+  const state = buildState([
+    { name: 'index.html', path: 'templates/index.html',
+      src: `<link rel="stylesheet" href="/static/app.css">\n` },
+    { name: 'app.css', path: 'static/app.css',
+      src: `body { margin: 0; }\n` },
+  ]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'broken-import' && h.file === 'templates/index.html'),
+    `/static/app.css resolves to repo-root static/app.css; got ${JSON.stringify(findKind(out, 'broken-import'))}`);
+});
+
+test('smells: unresolvable root-absolute URL flagged as absolute at info severity', () => {
+  const state = buildState([
+    { name: 'index.html', path: 'templates/index.html',
+      src: `<link rel="stylesheet" href="/static/missing.css">\n` },
+  ]);
+  const out = detectSmells(state);
+  const hit = out.find(h => h.kind === 'broken-import' && h.file === 'templates/index.html');
+  assertTrue(!!hit, 'unresolvable root-absolute URL should still surface');
+  assertEqual(hit.subkind, 'absolute');
+  assertEqual(hit.severity, 'info');
+});
+
 test('smells: Python local var via dispatch.get NOT flagged', () => {
   const state = buildState([{
     name: 'a.py', path: 'a.py',

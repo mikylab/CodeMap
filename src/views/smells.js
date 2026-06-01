@@ -4,7 +4,7 @@ import {
   dismissSmell, restoreSmell, isDismissed, setShowDismissed,
 } from '../state.js';
 import { el } from '../dom.js';
-import { smellExportBar } from '../smells-export.js';
+import { smellExportBar, smellCopyBtn } from '../smells-export.js';
 
 const KINDS = [
   { id: 'unresolved-call',   label: 'hallucinated' },
@@ -126,6 +126,7 @@ function item(f, onChange) {
       onChange();
     } },
   }));
+  head.appendChild(smellCopyBtn(f));
   head.appendChild(el('button', {
     cls: 'smell-dismiss', type: 'button',
     text: dismissed ? '↶ restore' : '✕ dismiss',
