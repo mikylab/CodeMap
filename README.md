@@ -9,6 +9,8 @@ browser.
 entirely in your browser. Or paste a public `github.com/owner/repo` URL into
 the app to explore any repo.
 
+![Codemap — drop a repo and get an interactive workspace: file/function navigator on the left, detail pane with effects, complexity, and smells on the right, plus full-screen Walk and Graph views.](docs/assets/demo.png)
+
 ## Run it locally
 
 ```sh

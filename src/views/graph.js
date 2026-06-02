@@ -11,9 +11,10 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 const DIR_COLOR = '#8b7fd1';
 // A single bright highlight reserved for the selected/focused node — distinct
 // from every language hue and from the folder violet, so the current selection
-// is unmistakable in a crowded map.
-const SELECT_FILL = '#ffb02e';
-const SELECT_STROKE = '#c77d00';
+// is unmistakable in a crowded map. Vivid magenta avoids the amber/gold band
+// owned by JavaScript (#EF9F27) and other warm language hues.
+const SELECT_FILL = '#ff3da6';
+const SELECT_STROKE = '#b3005f';
 
 export function renderGraphView(onChange) {
   if (!STATE.files.length) return splash();
