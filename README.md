@@ -40,23 +40,6 @@ files per repo.
 
 Codemap is a single two-pane workspace, not a stack of tabs.
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│ codemap   [🗺 Walk] [◉ Graph]    NET FS DB EXEC DOM ENV   ⚠ 23 │
-├────────────────────────┬───────────────────────────────────────┤
-│ ⌂ Repo    23 files     │  src/parser.js          PY  120L      │
-│ 🔍 search files & fns  │  ─────────────────────────────────    │
-│  ▾ src/                │  [Summary] [Source] [Calls] [Risk]    │
-│    ⚠ parser.js         │            [Deps]                     │
-│      ▾ parseFile (fn)  │                                       │
-│      • extractFns (fn) │  EFFECTS  [net] [fs]                  │
-│  ▾ tests/              │  FUNCTIONS (12)                       │
-│                        │   parseFile  L12  cx:8  [net]         │
-│                        │   extractFns L84  cx:5                │
-│                        │   …                                   │
-└────────────────────────┴───────────────────────────────────────┘
-```
-
 **Top bar** — `Walk` / `Graph` open full-screen overlays. Six effect chips
 (`net · fs · db · exec · dom · env`) filter the navigator. The `⚠ N` badge
 opens a full-screen Smells view; `✓ clean` if there are no findings.
