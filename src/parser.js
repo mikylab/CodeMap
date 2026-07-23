@@ -212,6 +212,13 @@ function stripNoise(text, ext) {
       .replace(/'(?:\\[\s\S]|[^'\\\n])*'/g, "''")
       .replace(/(^|[^\\])#[^\n]*/g, '$1');
   }
+  if (ext === 'cpp' || ext === 'cc' || ext === 'cxx' || ext === 'hpp' || ext === 'hh' || ext === 'h' || ext === 'c') {
+    return text
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:\\])\/\/[^\n]*/g, '$1')
+      .replace(/"(?:\\[\s\S]|[^"\\\n])*"/g, '""')
+      .replace(/'(?:\\[\s\S]|[^'\\\n])*'/g, "''");
+  }
   if (ext === 'js' || ext === 'mjs' || ext === 'cjs' || ext === 'ts' || ext === 'tsx' || ext === 'jsx') {
     return text
       .replace(/\/\*[\s\S]*?\*\//g, '')

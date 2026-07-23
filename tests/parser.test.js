@@ -474,3 +474,12 @@ test('c: plain .c file recognized as C', () => {
   assertEqual(out.lang, 'C');
   assertTrue(out.fns.map(f => f.name).includes('add'));
 });
+
+test('cpp: words in comments do not become call edges', () => {
+  const src = `void run() {\n  // call helper() here later\n  /* also compute() someday */\n  dispatch();\n}\n`;
+  const out = parseFile('run.cpp', src, 'src/run.cpp');
+  const run = out.fns.find(f => f.name === 'run');
+  assertTrue(run.calls.includes('dispatch'));
+  assertFalse(run.calls.includes('helper'));
+  assertFalse(run.calls.includes('compute'));
+});
