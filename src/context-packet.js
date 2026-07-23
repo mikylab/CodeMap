@@ -173,4 +173,63 @@ export function contextPacket(state, { paths = [], format = 'md' } = {}) {
   return renderMarkdown(model);
 }
 
-export function renderToon(model) { return renderMarkdown(model); }
+// Minimal, deterministic TOON encoder for our packet model. No dependency.
+// - array of uniform objects  -> `key[N]{col,col}:` header + one comma row per item
+// - array of scalars          -> `key[N]: a,b,c`
+// - object                    -> `key:` then indented children
+// - scalar                    -> `key: value`
+export function renderToon(model) {
+  const doc = {
+    scope: {
+      zones: model.repo.zones,
+      filesInScope: model.repo.matched.length,
+      totalFiles: model.repo.fileCount,
+      languages: model.repo.langs,
+    },
+    files: model.files.map(f => ({ path: f.path, lang: f.lang, lines: f.lineCount, cx: f.cx, libs: f.libs.join('|') })),
+    findings: model.findings.map(s => ({
+      file: s.file, line: s.line, kind: s.kind, subkind: s.subkind || '',
+      severity: s.severity, fn: s.fnName || '', why: s.why || '',
+    })),
+    hotspots: model.hotspots.map(h => ({ fn: h.name, file: h.file, cx: h.cx, fanIn: h.fanIn, score: h.score })),
+    functions: model.fns.map(fn => ({
+      fn: fn.name, file: fn.file, fanIn: fn.fanIn, fanOut: fn.fanOut,
+      calls: fn.callees.map(c => (c.resolved && !c.ambiguous) ? c.name : c.name + '?').join('|'),
+    })),
+  };
+  return toonEncode(doc, 0).join('\n') + '\n';
+}
+
+function toonScalar(v) {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  const s = String(v);
+  // Quote when a comma/newline would break the tabular row grammar.
+  return /[,\n"]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function isPlainObject(v) {
+  return v && typeof v === 'object' && !Array.isArray(v);
+}
+
+function toonEncode(node, depth) {
+  const pad = '  '.repeat(depth);
+  const lines = [];
+  for (const [key, val] of Object.entries(node)) {
+    if (Array.isArray(val)) {
+      if (val.length && val.every(isPlainObject)) {
+        const cols = Object.keys(val[0]);
+        lines.push(`${pad}${key}[${val.length}]{${cols.join(',')}}:`);
+        for (const row of val) lines.push(`${pad}  ${cols.map(c => toonScalar(row[c])).join(',')}`);
+      } else {
+        lines.push(`${pad}${key}[${val.length}]: ${val.map(toonScalar).join(',')}`);
+      }
+    } else if (isPlainObject(val)) {
+      lines.push(`${pad}${key}:`);
+      lines.push(...toonEncode(val, depth + 1));
+    } else {
+      lines.push(`${pad}${key}: ${toonScalar(val)}`);
+    }
+  }
+  return lines;
+}

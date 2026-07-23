@@ -78,3 +78,20 @@ test('context: same input yields byte-identical markdown', () => {
   const b = contextPacket(state, { paths: ['src/api'] });
   assertEqual(a, b);
 });
+
+test('context: toon packet is tabular and deterministic', () => {
+  const state = buildState(FILES);
+  const t1 = contextPacket(state, { paths: ['src/api'], format: 'toon' });
+  const t2 = contextPacket(state, { paths: ['src/api'], format: 'toon' });
+  assertEqual(t1, t2);                         // deterministic
+  assertTrue(t1.includes('files['));           // tabular array header
+  assertTrue(t1.includes('repo/src/api/api.js'));
+  assertFalse(t1.includes('# Codemap task context')); // not markdown
+});
+
+test('context: toon and markdown encode the same scope', () => {
+  const state = buildState(FILES);
+  const md = contextPacket(state, { paths: ['src/api'], format: 'md' });
+  const tn = contextPacket(state, { paths: ['src/api'], format: 'toon' });
+  assertTrue(md.includes('repo/src/api/api.js') && tn.includes('repo/src/api/api.js'));
+});
