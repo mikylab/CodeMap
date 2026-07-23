@@ -178,7 +178,7 @@ Files larger than 2MB are skipped; a banner above the stat bar lists how many.
 
 ## Supported languages
 
-JavaScript / JSX / TypeScript / TSX, Python, Go, Rust, Ruby, Java.
+JavaScript / JSX / TypeScript / TSX, Python, Go, Rust, Ruby, Java, C, C++.
 
 ## Add a language
 
