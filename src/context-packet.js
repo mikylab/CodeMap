@@ -1,7 +1,7 @@
 // Pure, DOM-free. Turns analyzed STATE + a set of paths (a specy-road task's
 // touch_zones) into a deterministic, task-scoped code-intelligence packet.
 // No LLM, no I/O, no randomness. See docs/plans/2026-07-23-specy-road-*.
-import { fnKey } from './trace-graph.js';
+import { fnKey, fnNameFromKey } from './trace-graph.js';
 import { dismissKey } from './triage.js';
 import { KIND_DESCRIPTIONS } from './smells-export.js';
 
@@ -32,7 +32,7 @@ export function packetModel(state, { paths = [] } = {}) {
   const inScope = new Set(files.map(f => f.path));
 
   const langs = [...new Set(files.map(f => f.lang))].sort();
-  const matched = files.map(f => f.path).sort();
+  const matched = [...inScope].sort();
 
   // Findings: scoped + not dismissed, in the smells module's canonical order.
   const dismissed = state.dismissedSmells || new Set();
@@ -50,7 +50,7 @@ export function packetModel(state, { paths = [] } = {}) {
     fanIn: state.fanIn.get(key) || 0,
     fanOut: state.fanOut.get(key) || 0,
     callers: (state.callersByFn.get(key) || [])
-      .map(c => ({ name: nameOfKey(c.from), file: c.fromFile, confidence: c.confidence, ambiguous: c.ambiguous }))
+      .map(c => ({ name: fnNameFromKey(c.from), file: c.fromFile, confidence: c.confidence, ambiguous: c.ambiguous }))
       .sort(byNameFile),
     callees: (state.callsByFn.get(key) || [])
       .map(e => ({ name: e.name, resolved: e.resolved, confidence: e.confidence, ambiguous: e.ambiguous }))
@@ -88,11 +88,6 @@ export function packetModel(state, { paths = [] } = {}) {
   };
 }
 
-function nameOfKey(key) {
-  // fnKey = `${file}::${name}@${lineNum}` — recover the bare name for display.
-  const m = String(key).match(/::([^@]+)@\d+$/);
-  return m ? m[1] : key;
-}
 function byNameFile(a, b) {
   return a.name.localeCompare(b.name) || String(a.file).localeCompare(String(b.file));
 }

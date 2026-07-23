@@ -8,6 +8,13 @@ export function fnKey(fn) {
   return `${fn.file}::${fn.name}@${fn.lineNum}`;
 }
 
+// Inverse of fnKey: recover the bare function name from a `file::name@line` key.
+// Falls back to the whole key if it doesn't parse.
+export function fnNameFromKey(key) {
+  const m = String(key).match(/::([^@]+)@\d+$/);
+  return m ? m[1] : key;
+}
+
 export function buildTraceTree(rootFn, callsByFn, fnByKey) {
   if (!rootFn) return null;
   const visited = new Set();
