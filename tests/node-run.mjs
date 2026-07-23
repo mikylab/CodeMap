@@ -1,4 +1,6 @@
 // Usage: node tests/node-run.mjs <suite>   (suite = filename without .test.js)
+// Note: browser-only suites (e.g. `triage`, which uses localStorage) are not
+// headless-safe and are expected to fail under Node — run those in tests.html.
 import { runConsole } from './runner.js';
 
 const suite = process.argv[2];

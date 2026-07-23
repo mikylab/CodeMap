@@ -161,6 +161,17 @@ export function renderMarkdown(model) {
   }
   L.push('');
 
+  if (model.crossEdges.length) {
+    L.push('## Boundary calls');
+    L.push('');
+    L.push('Calls crossing the task\'s scope boundary (regex-inferred; `in` = outside code calls into scope, `out` = scope calls outside; confidence shown).');
+    L.push('');
+    for (const e of model.crossEdges) {
+      L.push(`- ${e.direction}: \`${fnNameFromKey(e.from)}\` → \`${fnNameFromKey(e.to)}\` (${e.confidence})`);
+    }
+    L.push('');
+  }
+
   L.push('## Task');
   L.push('For each finding: decide **fix**, **false positive**, or **needs human judgement**. For real issues, propose a minimal fix as a unified diff against the named file. Group output by file.');
   L.push('');
@@ -196,6 +207,9 @@ export function renderToon(model) {
       fn: fn.name, file: fn.file, fanIn: fn.fanIn, fanOut: fn.fanOut,
       calls: fn.callees.map(c => (c.resolved && !c.ambiguous) ? c.name : c.name + '?').join('|'),
     })),
+    boundaryEdges: model.crossEdges.map(e => ({
+      direction: e.direction, from: fnNameFromKey(e.from), to: fnNameFromKey(e.to), confidence: e.confidence,
+    })),
   };
   return toonEncode(doc, 0).join('\n') + '\n';
 }
@@ -221,8 +235,10 @@ function toonEncode(node, depth) {
         const cols = Object.keys(val[0]);
         lines.push(`${pad}${key}[${val.length}]{${cols.join(',')}}:`);
         for (const row of val) lines.push(`${pad}  ${cols.map(c => toonScalar(row[c])).join(',')}`);
-      } else {
+      } else if (val.length) {
         lines.push(`${pad}${key}[${val.length}]: ${val.map(toonScalar).join(',')}`);
+      } else {
+        lines.push(`${pad}${key}[0]:`);
       }
     } else if (isPlainObject(val)) {
       lines.push(`${pad}${key}:`);

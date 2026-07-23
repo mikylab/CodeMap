@@ -110,8 +110,10 @@ Open from the top bar; close with **Esc** or the back button.
 From the **Smells** view, the *Task context* bar turns a set of paths (for
 example a [specy-road](https://github.com/shanevigil/specy-road) task's
 `touch_zones`) into a focused packet: the files in scope, their heuristic
-findings, complexity hotspots, and the call-graph neighborhood. Leave the paths
-blank for the whole repo. Choose **Markdown** (drops straight into a specy-road
+findings, complexity hotspots, the call-graph neighborhood, and the calls that
+cross the scope boundary (what depends on this area, and what it reaches).
+Leave the paths blank for the whole repo. Choose **Markdown** (drops straight
+into a specy-road
 `planning/` sheet) or **TOON** (token-compact for feeding an agent directly),
 then **Copy** or **Download**. Everything is computed in the browser — no server,
 no LLM.

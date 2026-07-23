@@ -8,6 +8,11 @@ All notable changes to Codemap are recorded here. Newest first.
   packet (Markdown or TOON) for a set of paths — a specy-road task's
   `touch_zones` — from the Smells view. Copy it or download it into your repo's
   `planning/` dir for a coding agent or a specy-road brief.
+- fix(export): the packet now renders cross-boundary call edges (`crossEdges`)
+  that were computed but never surfaced — a `## Boundary calls` section in
+  Markdown and a `boundaryEdges` table in TOON, so the agent sees what depends
+  on the scoped code and what it reaches outside it. Also fixed a TOON encoder
+  bug where an empty scalar array emitted a dangling trailing space.
 - feature: **C and C++ support.** Codemap now parses `.c`, `.cpp`, `.cc`, `.cxx`, `.h`, `.hpp`, and `.hh` files. Function *definitions* (signatures ending in a body) are extracted — including qualified methods (`Foo::bar`), constructors, destructors, and templates — while pure declarations in headers are skipped so nothing double-counts. `#include <...>` is treated as an external dependency; `#include "..."` becomes a local import edge resolved against repo files, so the dependency graph and call graph work across translation units. Regex-only per project rules: multi-line signatures, heavy template metaprogramming, and macro-generated functions are not captured, and ambiguous calls surface with the usual confidence markers. C-only projects render `.h` files under the C++ label.
 - fix(graph): the selected/focused node highlight no longer collides with the JavaScript language color. The reserved selection fill was gold (`#ffb02e`), nearly identical to JS's hue (`#EF9F27`), so a selected JS node was indistinguishable from any other JS node. The selection now uses a vivid magenta (`#ff3da6` fill / `#b3005f` stroke) that sits outside every language hue and the folder violet, keeping the current selection unmistakable.
 - docs: added a demo image to the top of the README (`docs/assets/demo.png`) showing the workspace at a glance.
