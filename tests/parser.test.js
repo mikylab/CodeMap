@@ -475,6 +475,15 @@ test('c: plain .c file recognized as C', () => {
   assertTrue(out.fns.map(f => f.name).includes('add'));
 });
 
+test('cpp: local variable declarations captured', () => {
+  const src = `void run() {\n  int count = 0;\n  const std::string name = "a";\n  char *buf = 0;\n  compute();\n}\n`;
+  const out = parseFile('run.cpp', src, 'src/run.cpp');
+  const run = out.fns.find(f => f.name === 'run');
+  assertTrue(run.locals.includes('count'), 'count');
+  assertTrue(run.locals.includes('name'), 'name');
+  assertTrue(run.locals.includes('buf'), 'buf');
+});
+
 test('cpp: words in comments do not become call edges', () => {
   const src = `void run() {\n  // call helper() here later\n  /* also compute() someday */\n  dispatch();\n}\n`;
   const out = parseFile('run.cpp', src, 'src/run.cpp');

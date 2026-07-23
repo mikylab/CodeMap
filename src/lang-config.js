@@ -140,7 +140,7 @@ export const LANG_CONFIG = {
     imports: [/#\s*include\s*<([^>]+)>/gm],
     localImports: [/#\s*include\s*"([^"]+)"/gm],
     docBefore: /\/\*\*([\s\S]*?)\*\//g,
-    locals: [/^[ \t]+(?:const\s+)?[A-Za-z_][\w:<>,*&\s\[\]]*?[\s*&]+([A-Za-z_]\w*)\s*[=;({]/gm],
+    locals: [/^[ \t]+(?:const\s+)?[A-Za-z_][\w:<>,\[\]]*(?:[\s*&]+[\w:<>,\[\]]+)*[\s*&]+([A-Za-z_]\w*)\s*[=;({]/gm],
     builtins: new Set([
       'printf', 'fprintf', 'sprintf', 'scanf', 'puts', 'putchar', 'getchar',
       'malloc', 'calloc', 'realloc', 'free', 'memcpy', 'memset', 'memmove', 'strlen', 'strcmp', 'strcpy',
