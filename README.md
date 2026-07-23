@@ -105,6 +105,17 @@ Open from the top bar; close with **Esc** or the back button.
   GitHub" link. The Lineage button only appears when a lineage section is
   found.
 
+### Task context for coding agents / specy-road
+
+From the **Smells** view, the *Task context* bar turns a set of paths (for
+example a [specy-road](https://github.com/shanevigil/specy-road) task's
+`touch_zones`) into a focused packet: the files in scope, their heuristic
+findings, complexity hotspots, and the call-graph neighborhood. Leave the paths
+blank for the whole repo. Choose **Markdown** (drops straight into a specy-road
+`planning/` sheet) or **TOON** (token-compact for feeding an agent directly),
+then **Copy** or **Download**. Everything is computed in the browser — no server,
+no LLM.
+
 ## Docs tab
 
 Markdown files at the repo root and anywhere under `docs/` are surfaced
