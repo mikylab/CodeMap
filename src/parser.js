@@ -319,6 +319,10 @@ function extractImports(src, cfg, path) {
 }
 
 function extractLocalImports(src, cfg, ext) {
+  // Languages with a dedicated localImports regex set (C/C++: quoted #include)
+  // name their local specs explicitly — use that set verbatim, no path filter.
+  const localRe = cfg.localImports || cfg.imports;
+  const explicitLocal = !!cfg.localImports;
   // Path-style languages (cfg.localStyle === 'path') only treat specs starting
   // with `.` or `/` as local. Dotted-namespace languages (Python, Java) can
   // have bare-name local specs — keep those.
@@ -331,10 +335,10 @@ function extractLocalImports(src, cfg, ext) {
     seen.add(raw);
     out.push(raw);
   };
-  forEachMatch(src, cfg.imports, raw => {
+  forEachMatch(src, localRe, raw => {
     raw = raw.trim();
     if (!raw) return;
-    if (pathStyle && !(raw.startsWith('.') || raw.startsWith('/'))) return;
+    if (!explicitLocal && pathStyle && !(raw.startsWith('.') || raw.startsWith('/'))) return;
     add(raw);
   });
 
