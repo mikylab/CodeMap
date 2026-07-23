@@ -2,7 +2,7 @@ import { STATE, importDismissed } from './state.js';
 import { el } from './dom.js';
 import { repoIdentity, triageExportPayload, parseTriageImport } from './triage.js';
 
-const KIND_DESCRIPTIONS = {
+export const KIND_DESCRIPTIONS = {
   'unresolved-call':    'Call to a name that no in-codebase function defines and no import provides — possibly hallucinated, dead, or relying on an undocumented global.',
   'broken-import':      'Import path that does not resolve to any file in the repo and is not a known stdlib / external dependency.',
   'suspicious-comment': 'Comment containing TODO/FIXME/HACK/XXX or similar — flag for follow-up.',
