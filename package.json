@@ -1,6 +1,6 @@
 {
   "name": "codemap",
-  "version": "3.10.1",
+  "version": "3.10.0",
   "description": "Browser-native, zero-LLM code intelligence tool.",
   "license": "MIT",
   "private": false,
