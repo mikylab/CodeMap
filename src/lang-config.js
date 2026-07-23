@@ -134,7 +134,7 @@ export const LANG_CONFIG = {
     // The Class:: qualifier and destructor ~ are outside the capture group so
     // group 1 is the bare function name (parser uses m[1]||m[2]||m[3]).
     fn: [
-      /^[ \t]*(?:template\s*<[^>]*>[ \t]*)?(?:[A-Za-z_][\w:<>,*&\s\[\]]*?[\s*&]+)?(?:\w+\s*::\s*)*~?([A-Za-z_]\w*)[ \t]*\([^;()]*\)[ \t]*(?:const|noexcept|override|final|[ \t])*(?::[^;{]*)?\{/gm,
+      /^[ \t]*(?:template\s*<[^>]*>[ \t]*)?(?:[A-Za-z_][\w:<>,\[\]]*(?:[\s*&]+[\w:<>,\[\]]+)*[\s*&]+)?(?:\w+\s*::\s*)*~?([A-Za-z_]\w*)[ \t]*\([^;()]*\)[ \t]*(?:const|noexcept|override|final|[ \t])*(?::[^;{]*)?\{/gm,
       /\b(?:class|struct)\s+(\w+)\s*(?:final\s*)?(?::[^{;]*)?\{/gm,
     ],
     imports: [/#\s*include\s*<([^>]+)>/gm],
