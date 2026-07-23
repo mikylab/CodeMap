@@ -105,7 +105,7 @@ function buildFileImportGraph(files) {
   return { fileImports, fileImporters };
 }
 
-const RESOLVE_EXTS = ['js', 'jsx', 'ts', 'tsx', 'py', 'rb', 'go', 'rs', 'java'];
+const RESOLVE_EXTS = ['js', 'jsx', 'ts', 'tsx', 'py', 'rb', 'go', 'rs', 'java', 'cpp', 'cc', 'cxx', 'hpp', 'hh', 'h', 'c'];
 
 function buildCallGraph(files) {
   const fnsByName = new Map();
@@ -191,6 +191,20 @@ function resolveLocalImport(importerPath, spec, byPath) {
       candidates.push(normPath(cur + '/' + dotted));
       const i = cur.lastIndexOf('/');
       cur = i < 0 ? '' : cur.slice(0, i);
+    }
+
+    // C/C++ quoted includes are literal paths (`widget.h`, `sub/util.h`),
+    // not dotted namespaces. Try the spec verbatim against the importer's
+    // directory and each ancestor, then the repo root. Appended last so it
+    // is only reached when every dotted candidate above has already missed.
+    if (/\.[A-Za-z0-9]+$/.test(spec) && !spec.includes('..')) {
+      let base = dir;
+      while (base) {
+        candidates.push(normPath(base + '/' + spec));
+        const i = base.lastIndexOf('/');
+        base = i < 0 ? '' : base.slice(0, i);
+      }
+      candidates.push(normPath(spec));
     }
   }
   for (const joined of candidates) {

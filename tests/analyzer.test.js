@@ -1,6 +1,7 @@
 import { test, assertEqual, assertDeepEqual, assertTrue, assertFalse } from './runner.js';
 import { analyze } from '../src/analyzer.js';
 import { fnKey } from '../src/trace-graph.js';
+import { parseFile } from '../src/parser.js';
 
 function file(path, imports) {
   return { path, fns: [], imports: imports.map(lib => ({ from: path, lib })), localImports: [] };
@@ -131,4 +132,34 @@ test('analyze: resolveIndex contains functions, classes, imports by name', () =>
   assertEqual(torchEntries.length, 1);
   assertEqual(torchEntries[0].kind, 'import');
   assertEqual(torchEntries[0].file, 'a.py');
+});
+
+test('cpp: quoted include resolves to sibling header', () => {
+  const files = [
+    parseFile('widget.cpp', `#include "widget.h"\nint main(){return 0;}\n`, 'src/widget.cpp'),
+    parseFile('widget.h', `struct Widget { int x; };\n`, 'src/widget.h'),
+  ];
+  const state = analyze(files);
+  const importers = state.fileImporters.get('src/widget.h');
+  assertTrue(!!importers && importers.has('src/widget.cpp'));
+});
+
+test('cpp: quoted include resolves via relative path', () => {
+  const files = [
+    parseFile('a.cpp', `#include "../core/util.h"\nint main(){return 0;}\n`, 'src/app/a.cpp'),
+    parseFile('util.h', `int help();\n`, 'src/core/util.h'),
+  ];
+  const state = analyze(files);
+  const importers = state.fileImporters.get('src/core/util.h');
+  assertTrue(!!importers && importers.has('src/app/a.cpp'));
+});
+
+test('existing python dotted resolution still works', () => {
+  const files = [
+    parseFile('main.py', `from pkg import mod\n`, 'main.py'),
+    parseFile('mod.py', `def f(): return 1\n`, 'pkg/mod.py'),
+  ];
+  const state = analyze(files);
+  const importers = state.fileImporters.get('pkg/mod.py');
+  assertTrue(!!importers && importers.has('main.py'));
 });
