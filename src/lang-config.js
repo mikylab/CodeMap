@@ -127,6 +127,31 @@ export const LANG_CONFIG = {
       'true', 'false', 'null', 'this', 'super',
     ]),
   },
+  cpp: {
+    name: 'C++', color: '#9C4DCC', comment: '//',
+    // Definitions only: a signature that ends in `{`. Declarations (`;`) are
+    // skipped so header decls don't double-count against .cpp definitions.
+    // The Class:: qualifier and destructor ~ are outside the capture group so
+    // group 1 is the bare function name (parser uses m[1]||m[2]||m[3]).
+    fn: [
+      /^[ \t]*(?:template\s*<[^>]*>[ \t]*)?(?:[A-Za-z_][\w:<>,*&\s\[\]]*?[\s*&]+)?(?:\w+\s*::\s*)*~?([A-Za-z_]\w*)[ \t]*\([^;()]*\)[ \t]*(?:const|noexcept|override|final|[ \t])*(?::[^;{]*)?\{/gm,
+      /\b(?:class|struct)\s+(\w+)\s*(?:final\s*)?(?::[^{;]*)?\{/gm,
+    ],
+    imports: [/#\s*include\s*<([^>]+)>/gm],
+    localImports: [/#\s*include\s*"([^"]+)"/gm],
+    docBefore: /\/\*\*([\s\S]*?)\*\//g,
+    locals: [/^[ \t]+(?:const\s+)?[A-Za-z_][\w:<>,*&\s\[\]]*?[\s*&]+([A-Za-z_]\w*)\s*[=;({]/gm],
+    builtins: new Set([
+      'printf', 'fprintf', 'sprintf', 'scanf', 'puts', 'putchar', 'getchar',
+      'malloc', 'calloc', 'realloc', 'free', 'memcpy', 'memset', 'memmove', 'strlen', 'strcmp', 'strcpy',
+      'sizeof', 'assert', 'std', 'cout', 'cin', 'cerr', 'endl',
+      'vector', 'string', 'map', 'set', 'unordered_map', 'unordered_set', 'pair', 'array', 'list', 'deque',
+      'unique_ptr', 'shared_ptr', 'make_unique', 'make_shared', 'move', 'forward',
+      'size_t', 'ssize_t', 'ptrdiff_t', 'int8_t', 'int16_t', 'int32_t', 'int64_t',
+      'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t', 'nullptr', 'NULL', 'true', 'false',
+      'int', 'char', 'bool', 'void', 'float', 'double', 'long', 'short', 'unsigned', 'signed', 'auto',
+    ]),
+  },
 };
 
 LANG_CONFIG.jsx = { ...LANG_CONFIG.js, name: 'JSX' };
@@ -156,3 +181,10 @@ LANG_CONFIG.less = { ...LANG_CONFIG.css, name: 'Less', color: '#264C82' };
 
 LANG_CONFIG.vue = { ...LANG_CONFIG.js, name: 'Vue',     color: '#41B883' };
 LANG_CONFIG.svelte = { ...LANG_CONFIG.js, name: 'Svelte', color: '#FF3E00' };
+
+LANG_CONFIG.cc   = { ...LANG_CONFIG.cpp };
+LANG_CONFIG.cxx  = { ...LANG_CONFIG.cpp };
+LANG_CONFIG.hpp  = { ...LANG_CONFIG.cpp };
+LANG_CONFIG.hh   = { ...LANG_CONFIG.cpp };
+LANG_CONFIG.h    = { ...LANG_CONFIG.cpp };
+LANG_CONFIG.c    = { ...LANG_CONFIG.cpp, name: 'C', color: '#5C6BC0' };

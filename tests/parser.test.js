@@ -410,3 +410,67 @@ test('parser: locals never include comparison ==', () => {
   const fn = file.fns.find(f => f.name === 'go');
   assertFalse(fn.locals.includes('a'));
 });
+
+test('cpp: extracts function definitions, not declarations', () => {
+  const src = `int add(int a, int b) {\n  return a + b;\n}\nvoid bar();\n`;
+  const out = parseFile('math.cpp', src, 'src/math.cpp');
+  assertEqual(out.lang, 'C++');
+  const names = out.fns.map(f => f.name);
+  assertTrue(names.includes('add'));
+  assertFalse(names.includes('bar')); // declaration only, no body
+});
+
+test('cpp: qualified method captures method name, not class', () => {
+  const src = `void Foo::bar(int a) {\n  baz();\n}\n`;
+  const out = parseFile('foo.cpp', src, 'src/foo.cpp');
+  const names = out.fns.map(f => f.name);
+  assertTrue(names.includes('bar'));
+  assertFalse(names.includes('Foo'));
+});
+
+test('cpp: destructor captured as class name without tilde', () => {
+  const src = `Foo::~Foo() {\n  cleanup();\n}\n`;
+  const out = parseFile('foo.cpp', src, 'src/foo.cpp');
+  assertTrue(out.fns.map(f => f.name).includes('Foo'));
+  assertFalse(out.fns.map(f => f.name).includes('~Foo'));
+});
+
+test('cpp: class and struct declarations captured', () => {
+  const src = `class Widget {\npublic:\n  int x;\n};\nstruct Point {\n  int x, y;\n};\n`;
+  const out = parseFile('types.hpp', src, 'src/types.hpp');
+  const names = out.fns.map(f => f.name);
+  assertTrue(names.includes('Widget'));
+  assertTrue(names.includes('Point'));
+});
+
+test('cpp: control-flow keywords not captured as functions', () => {
+  const src = `void run() {\n  if (x) { go(); }\n  while (y) { stop(); }\n  switch (z) { case 1: break; }\n}\n`;
+  const out = parseFile('run.cpp', src, 'src/run.cpp');
+  const names = out.fns.map(f => f.name);
+  assertTrue(names.includes('run'));
+  assertFalse(names.includes('if'));
+  assertFalse(names.includes('while'));
+  assertFalse(names.includes('switch'));
+});
+
+test('cpp: angle-bracket include is external dep', () => {
+  const src = `#include <vector>\n#include <sys/stat.h>\nint main() { return 0; }\n`;
+  const out = parseFile('a.cpp', src, 'a.cpp');
+  const libs = out.imports.map(i => i.lib);
+  assertTrue(libs.includes('vector'));
+  assertTrue(libs.includes('sys'));
+});
+
+test('cpp: quoted include is a local import, not external', () => {
+  const src = `#include "widget.h"\n#include <vector>\nint main() { return 0; }\n`;
+  const out = parseFile('a.cpp', src, 'src/a.cpp');
+  assertTrue(out.localImports.includes('widget.h'));
+  assertFalse(out.imports.map(i => i.lib).includes('widget'));
+});
+
+test('c: plain .c file recognized as C', () => {
+  const src = `int add(int a, int b) {\n  return a + b;\n}\n`;
+  const out = parseFile('math.c', src, 'src/math.c');
+  assertEqual(out.lang, 'C');
+  assertTrue(out.fns.map(f => f.name).includes('add'));
+});
