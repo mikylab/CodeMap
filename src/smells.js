@@ -21,11 +21,12 @@ export function detectSmells(state) {
   const byPath = state.byPath || new Map(state.files.map(f => [f.path, f]));
   const importBindingsByFile = buildImportBindingIndex(state);
   const sameFileNames = buildSameFileNameIndex(state);
+  const pageScripts = buildPageScriptIndex(state);
 
   for (const file of state.files) {
     const family = langFamily(file.ext);
     const stripped = stripStringsAndComments(file.src, family);
-    detectUnresolvedCalls(file, family, importBindingsByFile, sameFileNames, out);
+    detectUnresolvedCalls(file, family, importBindingsByFile, sameFileNames, pageScripts, out);
     detectBrokenImports(file, byPath, out);
     detectSuspiciousComments(file, family, out);
     detectEmptyCatches(file, family, out);
@@ -214,6 +215,53 @@ function collectGoBindings(src, set) {
   while ((m = defRe.exec(src)) !== null) set.add(m[1]);
 }
 
+// Paths of JS files that an HTML page in the repo loads with a <script> tag
+// *and* that use no module syntax of their own. Such a file is a classic
+// browser script: every free name it uses comes from the page's shared global
+// scope, so a CDN library loaded by a sibling <script> tag (Chart.js, d3,
+// jQuery, …) is a legitimate provider that no import statement will ever show.
+// We can't prove which globals a given tag defines, so these files' unresolved
+// calls are reported as info rather than warn.
+function buildPageScriptIndex(state) {
+  const srcs = [];
+  for (const file of state.files) {
+    if (file.ext !== 'html' && file.ext !== 'htm') continue;
+    // Quote-aware: a templated src can contain the *other* quote character
+    // (`src="{{ url_for('static', …) }}"`), so close on the opening quote only.
+    const re = /<script[^>]*?\ssrc\s*=\s*("[^"]*"|'[^']*')/gi;
+    let m;
+    while ((m = re.exec(file.src)) !== null) srcs.push(m[1].slice(1, -1));
+  }
+  const out = new Set();
+  if (!srcs.length) return out;
+  for (const file of state.files) {
+    if (langFamily(file.ext) !== 'js') continue;
+    if (hasModuleSyntax(file.src)) continue;
+    if (srcs.some(s => scriptSrcMatches(s, file.path))) out.add(file.path);
+  }
+  return out;
+}
+
+// Does a <script src="…"> value point at this file? The value is often not a
+// plain path — a template builds it (`{{ url_for('static', filename='js/app.js') }}`)
+// or it carries a cache-busting query — so we pull every script-path-shaped
+// token out of the value and accept any that is a path suffix of the file.
+function scriptSrcMatches(srcValue, path) {
+  const tokens = srcValue.split(/[?#]/)[0].match(/[\w./@-]+\.(?:js|mjs|cjs|jsx|ts|tsx)\b/gi) || [];
+  for (const tok of tokens) {
+    const rel = tok.replace(/^[./]+/, '');
+    if (!rel) continue;
+    if (path === rel || path.endsWith('/' + rel) || rel.endsWith('/' + path)) return true;
+  }
+  return false;
+}
+
+function hasModuleSyntax(src) {
+  return /^\s*(?:import|export)\b/m.test(src)
+      || /\brequire\s*\(/.test(src)
+      || /\bmodule\.exports\b/.test(src);
+}
+
 function buildSameFileNameIndex(state) {
   const out = new Map();
   for (const file of state.files) {
@@ -225,7 +273,7 @@ function buildSameFileNameIndex(state) {
 
 // --- 1. unresolved calls ---------------------------------------------------
 
-function detectUnresolvedCalls(file, family, importBindingsByFile, sameFileNames, out) {
+function detectUnresolvedCalls(file, family, importBindingsByFile, sameFileNames, pageScripts, out) {
   const callsByFn = file._callsByFn; // not used; we re-derive per fn below
   const builtins = BUILTINS[family] || new Set();
   const imports = importBindingsByFile.get(file.path) || new Set();
@@ -260,16 +308,19 @@ function detectUnresolvedCalls(file, family, importBindingsByFile, sameFileNames
       if (!m) continue;
       const line = lineFor(file.src, m.index);
       const snippet = snippetAt(file.src, m.index);
+      const pageScript = pageScripts && pageScripts.has(file.path);
       out.push({
         id: makeId(file.path, line, 'unresolved-call', snippet),
         kind: 'unresolved-call',
         subkind: callName,
-        severity: 'warn',
+        severity: pageScript ? 'info' : 'warn',
         file: file.path,
         line,
         fnName: fn.name,
         snippet,
-        why: `${callName}() has no definition or import in this repo`,
+        why: pageScript
+          ? `${callName}() has no definition or import in this repo — this file is loaded by a <script> tag, so it may come from another script on the page (e.g. a CDN library)`
+          : `${callName}() has no definition or import in this repo`,
       });
     }
   }
