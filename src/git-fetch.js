@@ -13,12 +13,17 @@ export const DEFAULT_MAX_FILES = 500;
 //   github.com/owner/repo/tree/branch/sub/dir
 //   gitlab.com/group/repo  (group may be nested: foo/bar/repo)
 //   gitlab.com/group/repo/-/tree/branch[/sub/dir]
-// Strips http(s):// and trailing .git
+// Strips http(s)://, any ?query / #fragment, and a trailing .git
 export function parseRepoUrl(input) {
   if (!input || typeof input !== 'string') return null;
   let s = input.trim();
   if (!s) return null;
-  s = s.replace(/^https?:\/\//i, '').replace(/^git@/, '').replace(/\.git$/i, '');
+  s = s.replace(/^https?:\/\//i, '').replace(/^git@/, '');
+  // Copying from the browser address bar carries GitHub/GitLab UI state that is
+  // not part of the repo path — `?tab=readme-ov-file`, `#readme`, `#L20`. Drop
+  // it before splitting, or it ends up glued onto the repo name or subpath.
+  s = s.replace(/[?#].*$/, '');
+  s = s.replace(/\.git$/i, '');
   s = s.replace(/^([^/:]+):/, '$1/'); // git@github.com:owner/repo → github.com/owner/repo
   const parts = s.split('/').filter(Boolean);
   if (parts.length < 3) return null;
@@ -147,6 +152,8 @@ function pickReadme(docs) {
 }
 
 // ─── GitHub ───────────────────────────────────────────────────────────────
+const ghSeg = s => encodeURIComponent(s);
+
 function ghHeaders(token) {
   const h = { 'Accept': 'application/vnd.github+json' };
   if (token) h['Authorization'] = `Bearer ${token}`;
@@ -155,14 +162,14 @@ function ghHeaders(token) {
 
 async function ghMeta({ owner, repo, ref }, token) {
   if (ref) return { ref };
-  const r = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers: ghHeaders(token) });
+  const r = await fetch(`https://api.github.com/repos/${ghSeg(owner)}/${ghSeg(repo)}`, { headers: ghHeaders(token) });
   if (!r.ok) throw new Error(`GitHub: ${r.status} ${r.statusText}${r.status === 403 ? ' (rate limit — try a token)' : ''}`);
   const j = await r.json();
   return { ref: j.default_branch || 'main' };
 }
 
 async function ghTree({ owner, repo }, ref, token) {
-  const r = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`, { headers: ghHeaders(token) });
+  const r = await fetch(`https://api.github.com/repos/${ghSeg(owner)}/${ghSeg(repo)}/git/trees/${encodeURIComponent(ref)}?recursive=1`, { headers: ghHeaders(token) });
   if (!r.ok) throw new Error(`GitHub tree: ${r.status} ${r.statusText}`);
   const j = await r.json();
   if (j.truncated) console.warn('codemap: GitHub tree response was truncated by the API');
@@ -171,7 +178,7 @@ async function ghTree({ owner, repo }, ref, token) {
 
 async function ghBlob({ owner, repo }, ref, path) {
   // raw.githubusercontent.com is CORS-friendly, anonymous, and doesn't burn the API rate limit
-  const url = `https://raw.githubusercontent.com/${owner}/${repo}/${encodeURIComponent(ref)}/${path.split('/').map(encodeURIComponent).join('/')}`;
+  const url = `https://raw.githubusercontent.com/${ghSeg(owner)}/${ghSeg(repo)}/${encodeURIComponent(ref)}/${path.split('/').map(encodeURIComponent).join('/')}`;
   const r = await fetch(url);
   if (!r.ok) throw new Error(`raw blob ${path}: ${r.status}`);
   return r.text();
