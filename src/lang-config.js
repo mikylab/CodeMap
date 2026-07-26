@@ -50,6 +50,8 @@ export const LANG_CONFIG = {
       /\bas\s+(\w+)\s*[:,)\n]/gm,
       // walrus operator: `name := expr`
       /\b(\w+)\s*:=/gm,
+      // lambda parameters: `lambda f, *a, **kw: ...` binds f / a / kw
+      /\blambda\s+([\w,\s*=]*?):/gm,
     ],
     builtins: new Set([
       'print', 'len', 'range', 'enumerate', 'zip', 'map', 'filter', 'sorted', 'reversed',
