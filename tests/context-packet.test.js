@@ -241,3 +241,21 @@ test('context: unknown limit values fall back to defaults', () => {
   assertEqual(bogus.limits.minSeverity, 'info');
   assertEqual(bogus.limits.callGraph, 'all');
 });
+
+test('context: parse-only state degrades instead of throwing', () => {
+  // No analyzer output at all — what the UI briefly holds mid-load.
+  const parsed = CAP_FILES.map(f => parseFile(f.name, f.src, f.path)).filter(Boolean);
+  const bare = { files: parsed };
+  const model = packetModel(bare, { paths: ['src/api'] });
+  assertTrue(model.fns.every(fn => fn.fanIn === 0 && fn.callers.length === 0));
+  assertEqual(model.crossEdges.length, 0);
+  assertTrue(renderMarkdown(model).includes('repo/src/api/a.js'));
+  assertTrue(renderToon(model).length > 0);
+});
+
+test('context: an empty state renders without throwing', () => {
+  const model = packetModel({}, { paths: ['src/api'] });
+  assertEqual(model.repo.fileCount, 0);
+  assertEqual(model.findings.length, 0);
+  assertTrue(renderMarkdown(model).includes('Nothing to report'));
+});

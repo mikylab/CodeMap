@@ -56,7 +56,8 @@ function clipSnippet(snippet, chars) {
 export function packetModel(state, { paths = [], ...limitOpts } = {}) {
   const limits = normalizeLimits(limitOpts);
   const zones = (paths || []).map(strip).filter(Boolean);
-  const files = state.files.filter(f => matchesAnyZone(f.path, zones));
+  const allFiles = (state && state.files) || [];
+  const files = allFiles.filter(f => matchesAnyZone(f.path, zones));
   const inScope = new Set(files.map(f => f.path));
 
   const langs = [...new Set(files.map(f => f.lang))].sort();
@@ -85,16 +86,24 @@ export function packetModel(state, { paths = [], ...limitOpts } = {}) {
   const byKind = [...kindCounts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 
   // Functions defined in scoped files, with their call-graph neighborhood.
-  const fnList = files.flatMap(f => f.fns.map(fn => ({ fn, key: fnKey(fn) })));
+  // The call-graph maps are absent on a parse-only state (and while the UI is
+  // still mid-load), so degrade to an empty neighborhood rather than throwing —
+  // same graceful-degradation contract the walker follows.
+  const NONE = new Map();
+  const fanInMap = state.fanIn || NONE;
+  const fanOutMap = state.fanOut || NONE;
+  const callersMap = state.callersByFn || NONE;
+  const calleesMap = state.callsByFn || NONE;
+  const fnList = files.flatMap(f => (f.fns || []).map(fn => ({ fn, key: fnKey(fn) })));
   fnList.sort((a, b) => a.fn.file.localeCompare(b.fn.file) || a.fn.lineNum - b.fn.lineNum);
   const fns = fnList.map(({ fn, key }) => ({
     key, name: fn.name, file: fn.file, lineNum: fn.lineNum, cx: fn.cx,
-    fanIn: state.fanIn.get(key) || 0,
-    fanOut: state.fanOut.get(key) || 0,
-    callers: (state.callersByFn.get(key) || [])
+    fanIn: fanInMap.get(key) || 0,
+    fanOut: fanOutMap.get(key) || 0,
+    callers: (callersMap.get(key) || [])
       .map(c => ({ name: fnNameFromKey(c.from), file: c.fromFile, confidence: c.confidence, ambiguous: c.ambiguous }))
       .sort(byNameFile),
-    callees: (state.callsByFn.get(key) || [])
+    callees: (calleesMap.get(key) || [])
       .map(e => ({ name: e.name, resolved: e.resolved, confidence: e.confidence, ambiguous: e.ambiguous }))
       .sort((a, b) => a.name.localeCompare(b.name)),
   }));
@@ -138,7 +147,7 @@ export function packetModel(state, { paths = [], ...limitOpts } = {}) {
     : fns.filter(fn => adjacent.has(fn.key));
 
   return {
-    repo: { fileCount: state.files.length, langs, zones, matched },
+    repo: { fileCount: allFiles.length, langs, zones, matched },
     files: files.map(f => ({
       path: f.path, lang: f.lang, lineCount: f.lineCount, cx: f.cx,
       libs: [...new Set((f.imports || []).map(i => i.lib))].sort(),

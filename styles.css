@@ -1551,11 +1551,15 @@ button, input, select { font: inherit; color: inherit; }
 
 /* Task-context export bar: zones field + budget controls */
 .ctx-zones {
-  flex: 1 1 260px; min-width: 200px; resize: vertical;
-  font-family: var(--font-mono); font-size: 12px; line-height: 1.5;
+  /* One line tall by default so the bar stays a single row; drag to expand
+     when pasting a long touch_zones list. */
+  flex: 1 1 200px; min-width: 150px; resize: vertical;
+  height: 30px; min-height: 30px; overflow-y: auto; white-space: nowrap;
+  font-family: var(--font-mono); font-size: 12px; line-height: 18px;
   padding: 5px 8px; background: var(--bg); color: var(--text);
   border: 0.5px solid var(--border2); border-radius: 4px;
 }
+.ctx-zones::placeholder { color: var(--muted); }
 .ctx-zones:focus { outline: none; border-color: var(--accent); }
 .ctx-max-label {
   display: inline-flex; align-items: center; gap: 6px;

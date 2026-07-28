@@ -24,7 +24,8 @@ export function contextExportBar() {
   wrap.appendChild(el('span', { cls: 'smell-export-label', text: 'Task context (specy-road / agent):' }));
 
   const zonesInput = el('textarea', {
-    cls: 'ctx-zones', attrs: { rows: '1', placeholder: 'touch_zones — e.g. src/api, routes/entries (blank = whole repo)' },
+    cls: 'ctx-zones', attrs: { rows: '1', placeholder: 'touch_zones — e.g. src/api, routes (blank = whole repo)' },
+    title: 'Paths this task touches. Comma- or newline-separated; blank means the whole repo.',
   });
 
   let format = 'md';
@@ -70,9 +71,15 @@ export function contextExportBar() {
   function refresh() {
     const opts = currentOpts();
     const files = matchCount(opts.paths);
-    // chars/4 is a rough proxy — enough to catch a runaway scope before copying.
-    const approx = Math.round(contextPacket(STATE, opts).length / 4);
-    count.textContent = `${files} files matched · ~${approx.toLocaleString()} tokens`;
+    // The estimate is a convenience, not the feature. It runs on every
+    // keystroke and at construction, so a failure here must never take the
+    // Smells view down with it — fall back to the plain file count.
+    let approx = null;
+    try { approx = Math.round(contextPacket(STATE, opts).length / 4); }
+    catch (e) { console.warn('codemap: packet size estimate failed', e); }
+    count.textContent = approx === null
+      ? `${files} files matched`
+      : `${files} files matched · ~${approx.toLocaleString()} tokens`;
   }
   zonesInput.addEventListener('input', refresh);
 
