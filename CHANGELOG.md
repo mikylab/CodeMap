@@ -14,6 +14,51 @@ All notable changes to Codemap are recorded here. Newest first.
   a specy-road `planning/` sheet) or **TOON** (token-compact for feeding an
   agent directly), then copy or download it. Computed entirely in the browser —
   no server, no LLM — and byte-identical for the same input.
+- feature: **Packet budget caps.** An unbounded packet on a wide scope is
+  expensive — the whole of this repo is ~39,000 tokens of Markdown, and the
+  call-graph section alone accounts for the largest share. The export bar now
+  exposes *Severity* (`all` / `warn+`), *Call graph* (`all` / `adjacent` /
+  `none`), and *Max findings*, alongside a live `~N tokens` estimate that
+  updates as the scope and caps change. `adjacent` narrows the call graph to
+  functions that carry a finding, rank as a complexity hotspot, or sit on the
+  scope boundary; hotspots and boundary calls are computed before narrowing, so
+  they are unaffected. Snippets can be truncated or dropped. Every cap is
+  disclosed in the rendered packet — a truncated list never reads as a complete
+  one. Defaults are unchanged, so an unconfigured export is byte-identical to
+  before.
+- feature: **Headless packet generation (`bin/codemap-packet.mjs`).** The same
+  pure core (parser → analyzer → smells → packet) runs under Node, so a roadmap
+  tool, git hook, or CI job can turn a task's `touch_zones` into agent context
+  with no browser: `node bin/codemap-packet.mjs --format toon --call-graph
+  adjacent src/api`. Zones are bare arguments and may be comma-separated so a
+  registry value pastes in verbatim. `--stats` prints what was included and
+  dropped. No dependencies, no network.
+- feature: **Triage that survives a CLI run.** Dismissals live in
+  `localStorage`, which is invisible to headless generation, so the same false
+  positives came back on every regeneration. `bin/codemap-packet.mjs` now reads
+  `.codemap-triage.json` from the repo root (override with `--triage`) — the
+  exact file the Smells view's `Export triage` already produces. Commit it and a
+  dismissal made once applies to every later run, for everyone, as a reviewable
+  diff instead of invisible per-browser state. Excluded findings are counted in
+  the packet and labelled "previously triaged as false positives — do not
+  re-report them", so an agent skips them knowingly rather than silently.
+- ui(smells): the two export bars now explain themselves. Each carries a
+  one-line caption stating what it operates on — the *Hand off to an LLM* bar
+  exports the findings as currently filtered, while *Task context* exports
+  everything about a set of paths — and every button has a tooltip saying what
+  it produces and where it goes. This makes the three easily-confused actions
+  distinguishable in place: `Copy packet` and `Download` emit identical bytes
+  and differ only in destination (clipboard vs file), whereas `Export triage`
+  is not a report at all — it is the set of findings you have dismissed as
+  false positives, and its tooltip points at committing it as
+  `.codemap-triage.json` so the CLI honours it too.
+- docs: added a **Using Codemap with specy-road** section to the README —
+  where `touch_zones` come from, the end-to-end loop, why the boundary section
+  is the thing to read first, how to make triage durable, and a full CLI
+  reference.
+- fix(smells): a parameter of a *nested* function no longer reads as an `unresolved-call` in the enclosing function. A function's `calls` are extracted from its whole body — which includes any function defined inside it — but its scope was only its own params and locals, so `def _save(fname, save_fn): return save_fn(...)` inside `patch_savefig()` flagged `save_fn` against the outer function. Nested definitions now contribute their names and parameters to the enclosing scope, derived by re-running each language's own `fn` regexes over the body (no new config). Python `lambda` parameters are bound too, via a new `locals` pattern.
+- fix(smells): unresolved calls in a classic browser script are reported as `info` instead of `warn`. When a repo's HTML loads a JS file with a `<script>` tag and that file uses no module syntax, its free names come from the page's shared global scope — a CDN library on a sibling tag (`new Chart(...)`, `d3`, `$`) is a real provider that no import statement can show. Codemap can't prove which globals a tag defines, so the finding stays visible but drops to info and says why. Script tags are matched quote-aware and by path suffix, so templated sources like `src="{{ url_for('static', filename='js/charts.js') }}"` are recognised. Files with `import` / `export` / `require` keep `warn` — those genuinely should declare their dependencies.
+- fix(git-fetch): URLs copied straight from the GitHub/GitLab address bar now load. `parseRepoUrl` kept the `?query` and `#fragment` the site appends to its own links, so `github.com/owner/repo?tab=readme-ov-file` resolved to a repo literally named `repo?tab=readme-ov-file` (404 from the API) and `.../blob/main/src/lib.js#L20` produced a subpath no file matched (0 files loaded). Both are stripped before the path is split, so pasting any GitHub/GitLab page URL — repo home, tree, blob with a line anchor, `?ref_type=heads` — works. Owner and repo are also percent-encoded when building API URLs.
 - feature: **C and C++ support.** Codemap now parses `.c`, `.cpp`, `.cc`, `.cxx`, `.h`, `.hpp`, and `.hh` files. Function *definitions* (signatures ending in a body) are extracted — including qualified methods (`Foo::bar`), constructors, destructors, and templates — while pure declarations in headers are skipped so nothing double-counts. `#include <...>` is treated as an external dependency; `#include "..."` becomes a local import edge resolved against repo files, so the dependency graph and call graph work across translation units. Regex-only per project rules: multi-line signatures, heavy template metaprogramming, and macro-generated functions are not captured, and ambiguous calls surface with the usual confidence markers. C-only projects render `.h` files under the C++ label.
 - fix(graph): the selected/focused node highlight no longer collides with the JavaScript language color. The reserved selection fill was gold (`#ffb02e`), nearly identical to JS's hue (`#EF9F27`), so a selected JS node was indistinguishable from any other JS node. The selection now uses a vivid magenta (`#ff3da6` fill / `#b3005f` stroke) that sits outside every language hue and the folder violet, keeping the current selection unmistakable.
 - docs: added a demo image to the top of the README (`docs/assets/demo.png`) showing the workspace at a glance.

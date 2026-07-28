@@ -73,7 +73,16 @@ function extractFns(src, cfg, path, newlines, ext) {
     const callText = stripNoise(body.text, ext);
     const paramNames = signatureParamNames(src, idx);
     const params = extractParams(src, idx);
-    const locals = extractLocals(callText, cfg);
+    // A function's `calls` are extracted from its whole body text, which for
+    // an outer function includes the bodies of any functions nested inside it.
+    // The scope has to match that: a name bound as a *nested* function's
+    // parameter (`def _save(fname, save_fn):` → `save_fn(...)`) is defined at
+    // every call site inside that nested body, so it must not read as
+    // unresolved from the enclosing function.
+    const locals = [...new Set([
+      ...extractLocals(callText, cfg),
+      ...nestedFnParams(body.text, cfg),
+    ])].sort();
     const nlAfter = src.indexOf('\n', idx);
     const bodyStartIdx = nlAfter < 0 ? src.length : nlAfter + 1;
     const doc = extractDocBefore(src, idx, cfg)
@@ -442,6 +451,31 @@ function decisionCount(s) {
   let n = 0;
   while (re.exec(s) !== null) n++;
   return n;
+}
+
+// Parameter names (and names) of function definitions nested inside a body.
+// Re-runs the language's own `fn` regexes over the body — no new config needed
+// — and skips the match at offset 0, which is the enclosing function's own
+// header. Closures, decorators, callbacks, and inner helpers all bind their
+// parameters for the code inside them; those bindings belong to the enclosing
+// function's scope because that is the text `extractCalls` walked.
+function nestedFnParams(bodyText, cfg) {
+  const out = new Set();
+  if (!cfg.fn || !cfg.fn.length) return out;
+  for (const re of cfg.fn) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(bodyText)) !== null) {
+      if (m.index === 0) continue; // the enclosing definition itself
+      const name = m[1] || m[2] || m[3];
+      if (name && !KEYWORDS.has(name)) out.add(name);
+      for (const p of extractParams(bodyText, m.index)) {
+        if (p.name && !KEYWORDS.has(p.name)) out.add(p.name.replace(/^\**/, ''));
+      }
+      if (re.lastIndex === m.index) re.lastIndex++; // zero-width guard
+    }
+  }
+  return out;
 }
 
 function extractLocals(bodyText, cfg) {

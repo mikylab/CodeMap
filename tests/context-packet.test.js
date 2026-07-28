@@ -146,3 +146,116 @@ test('context: toon quotes values containing commas and double-quotes', () => {
   const tn = renderToon(model);
   assertTrue(tn.includes('"has a comma, and a ""quote"""'));
 });
+
+// ---- Budget caps -----------------------------------------------------------
+
+// Two severities: FIXME => warn, TODO => info (see smells.js SUSPICIOUS handling).
+const CAP_FILES = [
+  { name: 'a.js', path: 'repo/src/api/a.js',
+    src: `export function alpha(x) {\n  // FIXME real problem\n  // TODO later\n  if (x) { return bravo(x); }\n  return missingOne(x);\n}\nexport function bravo(y) {\n  // TODO also later\n  return String(y);\n}\n` },
+  { name: 'b.js', path: 'repo/src/ui/b.js',
+    src: `export function charlie() {\n  // TODO ui cleanup\n  return 2;\n}\n` },
+];
+
+test('context: default limits reproduce the uncapped packet', () => {
+  const state = buildState(CAP_FILES);
+  assertEqual(contextPacket(state, { paths: ['src/api'] }),
+              contextPacket(state, { paths: ['src/api'], minSeverity: 'info', maxFindings: 0, callGraph: 'all' }));
+});
+
+test('context: minSeverity=warn drops info findings and says how many', () => {
+  const state = buildState(CAP_FILES);
+  const all = packetModel(state, { paths: ['src/api'] });
+  const warn = packetModel(state, { paths: ['src/api'], minSeverity: 'warn' });
+  assertTrue(all.findings.some(f => f.severity === 'info'), 'fixture should produce an info finding');
+  assertFalse(warn.findings.some(f => f.severity === 'info'));
+  assertEqual(warn.budget.droppedBySeverity, all.findings.length - warn.findings.length);
+  assertTrue(renderMarkdown(warn).includes('below severity `warn`'));
+});
+
+test('context: maxFindings caps the list and discloses the omission', () => {
+  const state = buildState(CAP_FILES);
+  const full = packetModel(state, { paths: ['src/api'] });
+  assertTrue(full.findings.length > 1, 'fixture should produce several findings');
+  const capped = packetModel(state, { paths: ['src/api'], maxFindings: 1 });
+  assertEqual(capped.findings.length, 1);
+  assertEqual(capped.budget.droppedByCap, full.findings.length - 1);
+  assertTrue(renderMarkdown(capped).includes('max-findings cap'));
+});
+
+test('context: capping keeps the most severe findings first', () => {
+  const state = buildState(CAP_FILES);
+  const capped = packetModel(state, { paths: ['src/api'], maxFindings: 1 });
+  assertEqual(capped.findings[0].severity, 'warn');
+});
+
+test('context: snippetChars truncates, -1 omits snippets', () => {
+  const state = buildState(CAP_FILES);
+  const clipped = packetModel(state, { paths: ['src/api'], snippetChars: 5 });
+  assertTrue(clipped.findings.every(f => !f.snippet || f.snippet.length <= 6));
+  const none = packetModel(state, { paths: ['src/api'], snippetChars: -1 });
+  assertTrue(none.findings.every(f => !f.snippet));
+  assertFalse(renderMarkdown(none).includes('- Snippet:'));
+});
+
+test('context: callGraph=none drops the section, hotspots and boundary survive', () => {
+  const state = buildState(CAP_FILES);
+  const full = packetModel(state, { paths: ['src/api'] });
+  const none = packetModel(state, { paths: ['src/api'], callGraph: 'none' });
+  assertEqual(none.fns.length, 0);
+  assertEqual(none.crossEdges.length, full.crossEdges.length);
+  assertEqual(none.hotspots.length, full.hotspots.length);
+  assertFalse(renderMarkdown(none).includes('## Call graph'));
+});
+
+test('context: callGraph=adjacent keeps only implicated functions', () => {
+  const state = buildState(CAP_FILES);
+  const adj = packetModel(state, { paths: ['src/api'], callGraph: 'adjacent' });
+  const full = packetModel(state, { paths: ['src/api'] });
+  assertTrue(adj.fns.length <= full.fns.length);
+  assertEqual(adj.budget.fnsTotal, full.fns.length);
+  assertEqual(adj.budget.fnsShown, adj.fns.length);
+});
+
+test('context: triaged findings are counted and flagged as do-not-report', async () => {
+  const state = buildState(CAP_FILES);
+  const { dismissKey } = await import('../src/triage.js');
+  const hit = state.smells.find(s => s.file === 'repo/src/api/a.js');
+  state.dismissedSmells = new Set([dismissKey(hit)]);
+  const model = packetModel(state, { paths: ['src/api'] });
+  assertEqual(model.budget.dismissed, 1);
+  const md = renderMarkdown(model);
+  assertTrue(md.includes('Do not re-report them.'));
+  assertTrue(renderToon(model).includes('do not re-report'));
+});
+
+test('context: capped packets stay byte-identical across runs', () => {
+  const state = buildState(CAP_FILES);
+  const opts = { paths: ['src/api'], format: 'toon', minSeverity: 'warn', maxFindings: 2, snippetChars: 40, callGraph: 'adjacent' };
+  assertEqual(contextPacket(state, opts), contextPacket(state, opts));
+});
+
+test('context: unknown limit values fall back to defaults', () => {
+  const state = buildState(CAP_FILES);
+  const bogus = packetModel(state, { paths: ['src/api'], minSeverity: 'nope', callGraph: 'sideways' });
+  assertEqual(bogus.limits.minSeverity, 'info');
+  assertEqual(bogus.limits.callGraph, 'all');
+});
+
+test('context: parse-only state degrades instead of throwing', () => {
+  // No analyzer output at all — what the UI briefly holds mid-load.
+  const parsed = CAP_FILES.map(f => parseFile(f.name, f.src, f.path)).filter(Boolean);
+  const bare = { files: parsed };
+  const model = packetModel(bare, { paths: ['src/api'] });
+  assertTrue(model.fns.every(fn => fn.fanIn === 0 && fn.callers.length === 0));
+  assertEqual(model.crossEdges.length, 0);
+  assertTrue(renderMarkdown(model).includes('repo/src/api/a.js'));
+  assertTrue(renderToon(model).length > 0);
+});
+
+test('context: an empty state renders without throwing', () => {
+  const model = packetModel({}, { paths: ['src/api'] });
+  assertEqual(model.repo.fileCount, 0);
+  assertEqual(model.findings.length, 0);
+  assertTrue(renderMarkdown(model).includes('Nothing to report'));
+});

@@ -379,3 +379,56 @@ test('smells: stable id across runs', () => {
   const b = detectSmells(mk());
   assertEqual(a[0].id, b[0].id);
 });
+
+test('smells: nested-def parameter is not an unresolved call in the enclosing fn', () => {
+  const filler = Array.from({ length: 12 }, (_, i) => `    step_${i} = tracker.note("x")`).join('\n');
+  const state = buildState([{
+    name: 'patch.py', path: 'capture/patch.py',
+    src: `def patch_savefig(tracker):\n${filler}\n\n` +
+         `    def _namespace_and_save(fname, save_fn, *args, **kwargs):\n` +
+         `        return save_fn(fname, *args, **kwargs)\n\n` +
+         `    def _hooked(fname, *args, **kwargs):\n` +
+         `        return _namespace_and_save(fname, _orig, *args, **kwargs)\n` +
+         `    return _hooked\n\n_orig = None\n`,
+  }]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'unresolved-call' && h.subkind === 'save_fn'),
+    `save_fn is a nested def's parameter; got ${JSON.stringify(out.filter(h => h.kind === 'unresolved-call'))}`);
+});
+
+test('smells: python lambda parameter is not an unresolved call', () => {
+  const state = buildState([{
+    name: 'l.py', path: 'l.py',
+    src: `def apply(items):\n    return [(lambda cb, *a: cb(*a))(f, 1) for f in items]\n`,
+  }]);
+  const out = detectSmells(state);
+  assertFalse(out.some(h => h.kind === 'unresolved-call' && h.subkind === 'cb'),
+    `cb is a lambda parameter; got ${JSON.stringify(out.filter(h => h.kind === 'unresolved-call'))}`);
+});
+
+test('smells: globals in a <script>-loaded page script report as info, not warn', () => {
+  const state = buildState([
+    { name: 'index.html', path: 'dashboard/templates/index.html',
+      src: `<html><body>\n<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>\n` +
+           `<script src="{{ url_for('static', filename='js/charts.js') }}"></script>\n</body></html>\n` },
+    { name: 'charts.js', path: 'dashboard/static/js/charts.js',
+      src: `function createChart(canvas, data) {\n  return new Chart(canvas, { type: 'line', data });\n}\n` },
+  ]);
+  const out = detectSmells(state);
+  const hit = out.find(h => h.kind === 'unresolved-call' && h.subkind === 'Chart');
+  assertTrue(!!hit, 'Chart should still be reported');
+  assertEqual(hit.severity, 'info');
+});
+
+test('smells: unresolved call in an ES module stays a warn', () => {
+  const state = buildState([
+    { name: 'index.html', path: 'index.html',
+      src: `<html><script src="app.js"></script></html>\n` },
+    { name: 'app.js', path: 'app.js',
+      src: `import { setup } from './setup.js';\nfunction go() { return missingHelper(setup()); }\n` },
+  ]);
+  const out = detectSmells(state);
+  const hit = out.find(h => h.kind === 'unresolved-call' && h.subkind === 'missingHelper');
+  assertTrue(!!hit, 'missingHelper should be reported');
+  assertEqual(hit.severity, 'warn');
+});

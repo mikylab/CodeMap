@@ -36,6 +36,31 @@ test('parseRepoUrl: gitlab tree with branch', () => {
     { host: 'gitlab', owner: 'foo', repo: 'bar', ref: 'main', subpath: 'sub/dir' });
 });
 
+test('parseRepoUrl: github query string is dropped', () => {
+  assertDeepEqual(parseRepoUrl('https://github.com/octocat/hello-world?tab=readme-ov-file'),
+    { host: 'github', owner: 'octocat', repo: 'hello-world', ref: null, subpath: '' });
+});
+
+test('parseRepoUrl: github fragment is dropped', () => {
+  assertDeepEqual(parseRepoUrl('https://github.com/octocat/hello-world#readme'),
+    { host: 'github', owner: 'octocat', repo: 'hello-world', ref: null, subpath: '' });
+});
+
+test('parseRepoUrl: blob line anchor is dropped from subpath', () => {
+  assertDeepEqual(parseRepoUrl('https://github.com/octocat/hello-world/blob/main/src/lib.js#L20-L34'),
+    { host: 'github', owner: 'octocat', repo: 'hello-world', ref: 'main', subpath: 'src/lib.js' });
+});
+
+test('parseRepoUrl: .git suffix behind a query string still stripped', () => {
+  assertDeepEqual(parseRepoUrl('https://github.com/octocat/hello-world.git?foo=1'),
+    { host: 'github', owner: 'octocat', repo: 'hello-world', ref: null, subpath: '' });
+});
+
+test('parseRepoUrl: gitlab tree ref with query is clean', () => {
+  assertDeepEqual(parseRepoUrl('https://gitlab.com/foo/bar/-/tree/main?ref_type=heads'),
+    { host: 'gitlab', owner: 'foo', repo: 'bar', ref: 'main', subpath: '' });
+});
+
 test('parseRepoUrl: rejects garbage', () => {
   assertNull(parseRepoUrl(''));
   assertNull(parseRepoUrl('not a url'));
