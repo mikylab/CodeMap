@@ -492,3 +492,23 @@ test('cpp: words in comments do not become call edges', () => {
   assertFalse(run.calls.includes('helper'));
   assertFalse(run.calls.includes('compute'));
 });
+
+test('py: lambda parameters are captured as locals', () => {
+  const out = parseFile('l.py', `def run(items):\n    return sorted(items, key=lambda item, *rest: item.n)\n`, 'l.py');
+  const run = out.fns.find(f => f.name === 'run');
+  assertTrue(run.locals.includes('item'));
+  assertTrue(run.locals.includes('rest'));
+});
+
+test('py: nested def parameters land in the enclosing fn scope', () => {
+  const out = parseFile('n.py', `def outer(a):\n    def inner(fname, save_fn):\n        return save_fn(fname)\n    return inner\n`, 'n.py');
+  const outer = out.fns.find(f => f.name === 'outer');
+  assertTrue(outer.locals.includes('save_fn'));
+  assertTrue(outer.locals.includes('fname'));
+});
+
+test('js: nested callback parameters land in the enclosing fn scope', () => {
+  const out = parseFile('n.js', `function outer(list) {\n  return list.map(function inner(item, done) { return done(item); });\n}\n`, 'n.js');
+  const outer = out.fns.find(f => f.name === 'outer');
+  assertTrue(outer.locals.includes('done'));
+});
