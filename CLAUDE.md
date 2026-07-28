@@ -31,7 +31,11 @@ codemap/
 │   ├── lineage-github.js  # Optional GitHub branch enrichment
 │   ├── markdown.js        # Minimal in-tree markdown → DOM renderer
 │   ├── doc-render.js      # Render captured docs into the workspace
+│   ├── context-packet.js  # Scoped task-context packet model + md/TOON renderers
+│   ├── context-export.js  # Task-context export bar (browser front-end)
 │   └── hash-state.js      # location.hash ↔ STATE sync for shareable views
+├── bin/
+│   └── codemap-packet.mjs # Headless packet generator (Node front-end)
 ├── CLAUDE.md           # This file
 └── README.md
 ```
@@ -44,6 +48,20 @@ codemap/
 - **renderer.js** — owns all `document.*` calls. Receives state, returns nothing. Must be re-renderable from scratch (idempotent).
 - **graph.js** — canvas-based dep graph. Nodes = files, edges = imports. Layout: circular with node size ∝ line count.
 - **lang-config.js** — exports `LANG_CONFIG`. Each entry: `{ name, color, fn: [RegExp], imports: [RegExp], comment }`.
+- **context-packet.js** — pure, DOM-free. Turns analyzed state + a path scope into a task-context packet, rendered as Markdown or TOON. No I/O, no randomness.
+- **bin/codemap-packet.mjs** — Node front-end over `context-packet.js`, for roadmap tooling and CI.
+
+### On `bin/` and the no-server rule
+
+`bin/codemap-packet.mjs` is a **second front-end over the same pure core**, not a
+backend. It does not serve anything, and nothing in the browser calls it. Every
+feature still works with `index.html` alone — the rule is that the browser path
+must be sufficient, not that no other caller may exist. The constraint this puts
+on the codebase is the useful part: anything the CLI needs must live in a pure,
+DOM-free module, which is where it belonged anyway.
+
+Keep it that way. Parsing, analysis, and packet logic stay DOM-free and
+importable from Node; `document.*` stays in `render*` / front-end modules.
 
 ---
 

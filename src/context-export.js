@@ -32,24 +32,62 @@ export function contextExportBar() {
   fmtBtn.addEventListener('click', () => {
     format = format === 'md' ? 'toon' : 'md';
     fmtBtn.textContent = `Format: ${format === 'md' ? 'Markdown' : 'TOON'}`;
+    refresh();
   });
 
-  const count = el('span', { cls: 'smell-export-count', text: `${matchCount([])} files matched` });
-  zonesInput.addEventListener('input', () => {
-    count.textContent = `${matchCount(parseZones(zonesInput.value))} files matched`;
+  // Budget controls. An unbounded packet on a wide scope runs to tens of
+  // thousands of tokens, so the cost is shown live and can be capped here.
+  let minSeverity = 'info';
+  const sevBtn = el('button', { cls: 'smell-export-btn', type: 'button', text: 'Severity: all', title: 'Include info findings, or warnings only' });
+  sevBtn.addEventListener('click', () => {
+    minSeverity = minSeverity === 'info' ? 'warn' : 'info';
+    sevBtn.textContent = `Severity: ${minSeverity === 'info' ? 'all' : 'warn+'}`;
+    refresh();
   });
+
+  const CALL_MODES = ['all', 'adjacent', 'none'];
+  let callGraph = 'all';
+  const cgBtn = el('button', { cls: 'smell-export-btn', type: 'button', text: 'Call graph: all', title: 'Full call graph, only functions the packet already mentions, or none' });
+  cgBtn.addEventListener('click', () => {
+    callGraph = CALL_MODES[(CALL_MODES.indexOf(callGraph) + 1) % CALL_MODES.length];
+    cgBtn.textContent = `Call graph: ${callGraph}`;
+    refresh();
+  });
+
+  const maxInput = el('input', {
+    cls: 'ctx-max', attrs: { type: 'number', min: '0', step: '10', value: '0', title: 'Max findings (0 = no cap)' },
+  });
+  maxInput.addEventListener('input', refresh);
+
+  function currentOpts() {
+    return {
+      paths: parseZones(zonesInput.value), format, minSeverity, callGraph,
+      maxFindings: Math.max(0, Number(maxInput.value) || 0),
+    };
+  }
+
+  const count = el('span', { cls: 'smell-export-count', text: '' });
+  function refresh() {
+    const opts = currentOpts();
+    const files = matchCount(opts.paths);
+    // chars/4 is a rough proxy — enough to catch a runaway scope before copying.
+    const approx = Math.round(contextPacket(STATE, opts).length / 4);
+    count.textContent = `${files} files matched · ~${approx.toLocaleString()} tokens`;
+  }
+  zonesInput.addEventListener('input', refresh);
 
   const copyBtn = el('button', { cls: 'smell-export-btn', type: 'button', text: 'Copy packet', title: 'Copy the task-context packet to your clipboard' });
   copyBtn.addEventListener('click', async () => {
-    const out = contextPacket(STATE, { paths: parseZones(zonesInput.value), format });
+    const out = contextPacket(STATE, currentOpts());
     try { await navigator.clipboard.writeText(out); flash(copyBtn, 'Copied ✓'); }
     catch { flash(copyBtn, 'Copy failed'); }
   });
 
   const dlBtn = el('button', { cls: 'smell-export-btn', type: 'button', text: 'Download', title: 'Save the packet as a file for your repo’s planning/ dir' });
   dlBtn.addEventListener('click', () => {
-    const zones = parseZones(zonesInput.value);
-    const out = contextPacket(STATE, { paths: zones, format });
+    const opts = currentOpts();
+    const zones = opts.paths;
+    const out = contextPacket(STATE, opts);
     const ext = format === 'md' ? 'md' : 'toon';
     const slug = zones.length ? zones.join('-').replace(/[\\/]/g, '_') : 'repo';
     const mime = format === 'md' ? 'text/markdown' : 'text/plain';
@@ -63,8 +101,12 @@ export function contextExportBar() {
 
   wrap.appendChild(zonesInput);
   wrap.appendChild(fmtBtn);
+  wrap.appendChild(sevBtn);
+  wrap.appendChild(cgBtn);
+  wrap.appendChild(el('label', { cls: 'ctx-max-label', text: 'Max findings' }, [maxInput]));
   wrap.appendChild(copyBtn);
   wrap.appendChild(dlBtn);
   wrap.appendChild(count);
+  refresh();
   return wrap;
 }
