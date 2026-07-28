@@ -42,6 +42,16 @@ All notable changes to Codemap are recorded here. Newest first.
   diff instead of invisible per-browser state. Excluded findings are counted in
   the packet and labelled "previously triaged as false positives — do not
   re-report them", so an agent skips them knowingly rather than silently.
+- ui(smells): the two export bars now explain themselves. Each carries a
+  one-line caption stating what it operates on — the *Hand off to an LLM* bar
+  exports the findings as currently filtered, while *Task context* exports
+  everything about a set of paths — and every button has a tooltip saying what
+  it produces and where it goes. This makes the three easily-confused actions
+  distinguishable in place: `Copy packet` and `Download` emit identical bytes
+  and differ only in destination (clipboard vs file), whereas `Export triage`
+  is not a report at all — it is the set of findings you have dismissed as
+  false positives, and its tooltip points at committing it as
+  `.codemap-triage.json` so the CLI honours it too.
 - docs: added a **Using Codemap with specy-road** section to the README —
   where `touch_zones` come from, the end-to-end loop, why the boundary section
   is the thing to read first, how to make triage durable, and a full CLI
