@@ -105,6 +105,142 @@ Open from the top bar; close with **Esc** or the back button.
   GitHub" link. The Lineage button only appears when a lineage section is
   found.
 
+### Task context for coding agents / specy-road
+
+From the **Smells** view, the *Task context* bar turns a set of paths (for
+example a [specy-road](https://github.com/shanevigil/specy-road) task's
+`touch_zones`) into a focused packet: the files in scope, their heuristic
+findings, complexity hotspots, the call-graph neighborhood, and the calls that
+cross the scope boundary (what depends on this area, and what it reaches).
+Leave the paths blank for the whole repo. Choose **Markdown** (drops straight
+into a specy-road `planning/` sheet) or **TOON** (token-compact for feeding an
+agent directly), then **Copy** or **Download**. Everything is computed in the
+browser — no server, no LLM.
+
+The same packet is available headlessly, so a roadmap tool or CI job can build
+it without a browser — see [Using Codemap with specy-road](#using-codemap-with-specy-road).
+
+#### Keeping the packet small
+
+An unbounded packet on a wide scope is large: the whole of this repo is roughly
+39,000 tokens of Markdown. Four levers, in the order worth reaching for:
+
+1. **Narrow the zones.** By far the biggest lever — a single file is ~500
+   tokens in TOON against ~39,000 for the whole repo. If the touch zones are
+   honest, this alone is usually enough.
+2. **Use TOON.** Roughly half the size of Markdown for identical content.
+3. **Triage first.** Dismissed findings are excluded from every future packet
+   (see below).
+4. **Cap what's left.** The bar exposes *Severity* (`all` / `warn+`),
+   *Call graph* (`all` / `adjacent` / `none`), and *Max findings*. The live
+   `~N tokens` readout next to the buttons updates as you change them.
+
+`Call graph: adjacent` narrows the largest section to the functions the packet
+already talks about — those carrying a finding, ranked as a hotspot, or sitting
+on the scope boundary. Complexity hotspots and boundary calls are computed
+before any narrowing, so they never change.
+
+Every cap is disclosed in the output ("*N further finding(s) omitted by the
+max-findings cap*"). A truncated packet never reads as a complete one.
+
+## Using Codemap with specy-road
+
+[specy-road](https://github.com/shanevigil/specy-road) keeps a roadmap graph in
+your repo so humans and coding agents share one plan. It tracks *which* paths a
+task owns — its `touch_zones` — but it never parses your code. Codemap parses
+your code but knows nothing about tasks. Hand the same path list to both and
+each does the half it's good at.
+
+Nothing about the specy-road workflow changes. This adds one optional step
+between claiming a task and writing code.
+
+### The loop
+
+```bash
+specy-road do-next-available-task     # claims a task, writes touch_zones into
+                                      # roadmap/registry.yaml, cuts feature/rm-<codename>
+
+# turn those zones into agent context
+node bin/codemap-packet.mjs \
+  --format toon --min-severity warn --call-graph adjacent \
+  --out planning/<node>-codemap.toon \
+  src/api routes/entries
+
+# ...implement, then finish as usual
+specy-road finish-this-task --on-complete merge
+```
+
+Zones are the bare arguments and may be comma-separated, so a `touch_zones`
+value pastes in verbatim. No zones means the whole repo.
+
+Prefer the GUI? Load the repo in Codemap at the feature branch, paste the same
+zones into the *Task context* bar, and **Download** into `planning/`. The two
+front-ends call the same pure core, so the output is byte-identical.
+
+### Why bother
+
+specy-road's registry tells you which files are yours. It can't tell you what
+depends on them. The packet's **Boundary calls** section is the blast radius of
+the task — what outside code calls into your zone, and what your zone reaches
+out to. If that section is large, the touch zones are drawn too narrow: the work
+will spill into files you haven't claimed, possibly ones a teammate has. Better
+to find that out before you start and widen the zones in the registry.
+
+### Triage: don't pay for the same false positive twice
+
+Findings are heuristic and some are wrong. Dismiss one in the Smells view and
+it's gone — but browser dismissals live in `localStorage`, which a CLI run can't
+see. To make triage stick across machines, agents, and CI, commit it:
+
+```bash
+# In the Smells view: dismiss the false positives, then `Export triage`.
+mv ~/Downloads/codemap-triage-<slug>.json .codemap-triage.json
+git add .codemap-triage.json && git commit -m "chore: codemap triage baseline"
+```
+
+`bin/codemap-packet.mjs` picks up `.codemap-triage.json` from the repo root
+automatically (override with `--triage <file>`). Excluded findings are counted
+in the packet and labelled *"previously triaged as false positives — do not
+re-report them"*, so an agent both skips them and knows they were skipped
+deliberately.
+
+Because the file is in git, a dismissal made once by one person applies to every
+later run by anyone. Teammates pick it up on `git pull`; a new dismissal is a
+reviewable diff rather than invisible state in someone's browser.
+
+**Limitation worth knowing:** a finding's identity is
+`file | kind | subkind | snippet[:80]`, deliberately excluding the line number —
+so inserting code above a finding keeps it dismissed, but editing the flagged
+line itself changes its identity and the finding comes back. That's the
+conservative choice: changed code gets re-examined.
+
+### CLI reference
+
+```
+node bin/codemap-packet.mjs [options] [zone ...]
+
+  --repo <dir>          repo root to scan (default: cwd)
+  --format md|toon      output format (default: md)
+  --triage <file>       triaged findings to exclude
+                        (default: <repo>/.codemap-triage.json when present)
+  --min-severity <s>    info | warn (default: info)
+  --max-findings <n>    cap findings, most severe first (default: 0 = no cap)
+  --snippet-chars <n>   truncate snippets; 0 = full, -1 = omit
+  --call-graph <mode>   all | adjacent | none (default: all)
+  -o, --out <file>      write to a file instead of stdout
+  --stats               print a size summary to stderr
+```
+
+`--stats` reports what was included and dropped, which is the quickest way to
+tune a scope:
+
+```
+codemap-packet: files 15/72 · findings 25/102 · fns 186/264 · chars 32955 ·
+                ~tokens 8239 · triaged-out 30 · triage .codemap-triage.json
+```
+
+Requires Node (ES modules); no dependencies, no install step, no network.
+
 ## Docs tab
 
 Markdown files at the repo root and anywhere under `docs/` are surfaced

@@ -39,3 +39,20 @@ export async function report(rootId = 'results') {
   root.appendChild(summary);
   console.log(`${pass}/${cases.length} passed`);
 }
+
+// Node-friendly runner: no DOM. Returns the number of failures.
+export async function runConsole() {
+  let pass = 0, fail = 0;
+  for (const c of cases) {
+    try {
+      await c.fn();
+      console.log(`✓ ${c.name}`);
+      pass++;
+    } catch (e) {
+      console.error(`✗ ${c.name} — ${e.message}`);
+      fail++;
+    }
+  }
+  console.log(`${pass}/${cases.length} passed${fail ? ` (${fail} failed)` : ''}`);
+  return fail;
+}

@@ -1548,6 +1548,39 @@ button, input, select { font: inherit; color: inherit; }
   margin-left: auto;
   font-family: var(--font-mono); font-size: 11px; color: var(--muted);
 }
+/* Explainer line: ordered last so it caption-wraps under the controls rather
+   than pushing the label onto a row of its own. */
+.smell-export-hint {
+  /* width:100% (not max-width) so it always claims a row of its own — a
+     max-width lets the preceding controls share the line and squeeze it. */
+  flex: 1 0 100%; width: 100%; order: 99;
+  margin: 2px 0 0;
+  font-size: 11px; line-height: 1.45; color: var(--muted);
+}
+
+/* Task-context export bar: zones field + budget controls */
+.ctx-zones {
+  /* One line tall by default so the bar stays a single row; drag to expand
+     when pasting a long touch_zones list. */
+  flex: 1 1 200px; min-width: 150px; resize: vertical;
+  height: 30px; min-height: 30px; overflow-y: auto; white-space: nowrap;
+  font-family: var(--font-mono); font-size: 12px; line-height: 18px;
+  padding: 5px 8px; background: var(--bg); color: var(--text);
+  border: 0.5px solid var(--border2); border-radius: 4px;
+}
+.ctx-zones::placeholder { color: var(--muted); }
+.ctx-zones:focus { outline: none; border-color: var(--accent); }
+.ctx-max-label {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+}
+.ctx-max {
+  width: 62px; padding: 5px 6px;
+  font-family: var(--font-mono); font-size: 12px;
+  background: var(--bg); color: var(--text);
+  border: 0.5px solid var(--border2); border-radius: 4px;
+}
+.ctx-max:focus { outline: none; border-color: var(--accent); }
 
 /* Back button + breadcrumb (reader-mode nav) */
 .ws-back-btn {

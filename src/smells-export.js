@@ -2,7 +2,7 @@ import { STATE, importDismissed } from './state.js';
 import { el } from './dom.js';
 import { repoIdentity, triageExportPayload, parseTriageImport } from './triage.js';
 
-const KIND_DESCRIPTIONS = {
+export const KIND_DESCRIPTIONS = {
   'unresolved-call':    'Call to a name that no in-codebase function defines and no import provides — possibly hallucinated, dead, or relying on an undocumented global.',
   'broken-import':      'Import path that does not resolve to any file in the repo and is not a known stdlib / external dependency.',
   'suspicious-comment': 'Comment containing TODO/FIXME/HACK/XXX or similar — flag for follow-up.',
@@ -10,14 +10,25 @@ const KIND_DESCRIPTIONS = {
   'placeholder':        'Placeholder/stub left in code: `pass`, `NotImplementedError`, `throw new Error("not implemented")`, etc.',
 };
 
+// One-line explainer under a bar's label, so the difference between the two
+// export bars is visible without hovering anything.
+export function exportBarHint(text) {
+  return el('div', { cls: 'smell-export-hint', text });
+}
+
 export function smellExportBar(smells, slug) {
   const wrap = el('div', { cls: 'smell-export-bar' });
   wrap.appendChild(el('span', { cls: 'smell-export-label', text: 'Hand off to an LLM:' }));
+  wrap.appendChild(exportBarHint(
+    'The findings listed below, as they are filtered right now — no call graph. '
+    + 'Triage is your false-positive decisions, kept separately.'));
 
   const copyBtn = el('button', {
     cls: 'smell-export-btn', type: 'button',
     text: 'Copy prompt',
-    title: 'Copy a markdown brief of these findings to your clipboard',
+    title: 'Clipboard — markdown brief of the findings currently listed below.\n\n'
+      + 'Findings only: no files, hotspots, call graph or boundary calls. '
+      + 'For those, use the Task context bar underneath.',
   });
   copyBtn.addEventListener('click', async () => {
     const md = buildPrompt(smells);
@@ -33,7 +44,8 @@ export function smellExportBar(smells, slug) {
   const dlBtn = el('button', {
     cls: 'smell-export-btn', type: 'button',
     text: 'Download .md',
-    title: 'Save the prompt as a markdown file',
+    title: 'File — the same brief as "Copy prompt", saved as codemap-smells-<filter>.md '
+      + 'instead of going to the clipboard.',
   });
   dlBtn.addEventListener('click', () => {
     const md = buildPrompt(smells);
@@ -61,7 +73,11 @@ function triageExportBtn(slug) {
   const btn = el('button', {
     cls: 'smell-export-btn', type: 'button',
     text: 'Export triage',
-    title: 'Download dismissed findings as JSON',
+    title: 'File — your dismissals (which findings are false positives) as JSON.\n\n'
+      + 'Not a report: nothing here goes to an LLM. Dismissals live in this browser only, '
+      + 'so export them to move triage to another machine or teammate.\n\n'
+      + 'Save it as .codemap-triage.json in the repo root and commit it, and '
+      + 'bin/codemap-packet.mjs will skip these findings on every future run.',
   });
   btn.addEventListener('click', () => {
     const repoId = repoIdentity(STATE);
@@ -84,7 +100,9 @@ function triageImportBtn() {
   const btn = el('button', {
     cls: 'smell-export-btn', type: 'button',
     text: 'Import triage',
-    title: 'Merge dismissed findings from a JSON file',
+    title: 'Load a triage JSON file and merge its dismissals into yours.\n\n'
+      + 'Union-merges — it never un-dismisses anything you have already dismissed. '
+      + 'Warns first if the file came from a different repo.',
   });
   const input = document.createElement('input');
   input.type = 'file';

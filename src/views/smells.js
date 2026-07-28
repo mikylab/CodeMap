@@ -5,6 +5,7 @@ import {
 } from '../state.js';
 import { el } from '../dom.js';
 import { smellExportBar, smellCopyBtn } from '../smells-export.js';
+import { contextExportBar } from '../context-export.js';
 
 const KINDS = [
   { id: 'unresolved-call',   label: 'hallucinated' },
@@ -35,6 +36,7 @@ export function renderSmells(onChange) {
       ? STATE.smellsFileFilter.replace(/[\\/]/g, '_')
       : (STATE.smellsKindFilter.size ? [...STATE.smellsKindFilter].sort().join('-') : 'all');
     wrap.appendChild(smellExportBar(filtered, slug));
+    wrap.appendChild(contextExportBar());
   }
   wrap.appendChild(list(onChange));
   return wrap;
